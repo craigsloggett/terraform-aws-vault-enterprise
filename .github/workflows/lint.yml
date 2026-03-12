@@ -35,9 +35,6 @@ jobs:
 
       - name: Lint Terraform Configuration
         uses: craigsloggett/lint-terraform@63768749ed0bf83c362f221ca7af1f22deaa66ef # v1.0.11
-        with: # Remove if not using a private module registry.
-          hcp-terraform-hostname: app.terraform.io
-          hcp-terraform-api-token: ${{ secrets.TF_TOKEN_APP_TERRAFORM_IO }}
 
   terraform-docs:
     name: Terraform Docs

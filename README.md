@@ -1,5 +1,5 @@
-# terraform-module-template
-A GitHub repository template for creating new Terraform module.
+# terraform-aws-vault-enterprise-ha
+A Terraform module for deploying HashiCorp Vault Enterprise in a highly available configuration on AWS.
 
 <!-- BEGIN_TF_DOCS -->
 ## Usage
@@ -7,8 +7,8 @@ A GitHub repository template for creating new Terraform module.
 ### main.tf
 ```hcl
 # tflint-ignore: terraform_required_version
-module "my_module" {
-  source = "<namespace>/<module>/<provider>"
+module "vault" {
+  source = "craigsloggett/vault-enterprise-ha/aws"
   # version = "x.x.x"
 }
 ```

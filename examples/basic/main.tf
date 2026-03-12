@@ -1,5 +1,5 @@
 # tflint-ignore: terraform_required_version
-module "my_module" {
-  source = "<namespace>/<module>/<provider>"
+module "vault" {
+  source = "craigsloggett/vault-enterprise-ha/aws"
   # version = "x.x.x"
 }
