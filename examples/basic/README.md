@@ -1,8 +1,8 @@
 # Example - Basic Usage
 
 ```hcl
-module "my_module" {
-  source  = "<namespace>/<module_name>/<provider>"
+module "vault" {
+  source  = "craigsloggett/vault-enterprise-ha/aws"
   version = "x.x.x"
 }
 ```
