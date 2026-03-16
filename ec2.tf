@@ -36,7 +36,7 @@ resource "aws_instance" "vault" {
   }
 
   user_data = templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
-    vault_version                = var.vault_version
+    vault_version                = var.vault_package_version
     vault_fqdn                   = local.vault_fqdn
     node_id                      = "vault-${count.index}"
     region                       = data.aws_region.current.name

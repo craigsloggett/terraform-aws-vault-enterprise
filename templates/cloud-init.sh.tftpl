@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Disable false positives caused by shellcheck not understanding Terraform's template syntax.
+# shellcheck disable=SC2034,SC2086,SC2154,SC2157,SC2170,SC2193
 set -euo pipefail
 
 # Install dependencies
@@ -8,13 +10,34 @@ apt-get install -y \
   jq \
   unzip \
   gnupg \
-  lsb-release
+  lsb-release \
+  nvme-cli
 
 # Format and mount EBS volume for Raft storage
-DEVICE="/dev/nvme1n1"
+# Resolve the NVMe device backing the /dev/xvdf EBS attachment.
+# AWS encodes the attachment name (without /dev/) in the NVMe serial field.
+DEVICE=""
+ATTEMPTS=0
+MAX_ATTEMPTS=30
 
-while [ ! -b "$${DEVICE}" ]; do
-  sleep 2
+while [ -z "$${DEVICE}" ]; do
+  for dev in /dev/nvme*n1; do
+    [ -b "$${dev}" ] || continue
+    SERIAL=$(nvme id-ctrl -v "$${dev}" 2>/dev/null | grep -oP '(?<=sn\s{8}: ).*' | tr -d ' ')
+    if [ "$${SERIAL}" = "xvdf" ]; then
+      DEVICE="$${dev}"
+      break
+    fi
+  done
+
+  if [ -z "$${DEVICE}" ]; then
+    ATTEMPTS=$((ATTEMPTS + 1))
+    if [ "$${ATTEMPTS}" -ge "$${MAX_ATTEMPTS}" ]; then
+      echo "ERROR: EBS volume not found after $${MAX_ATTEMPTS} attempts" >&2
+      exit 1
+    fi
+    sleep 2
+  fi
 done
 
 if ! blkid "$${DEVICE}"; then
@@ -24,13 +47,15 @@ fi
 mkdir -p /opt/vault/data
 mount "$${DEVICE}" /opt/vault/data
 
-echo "$${DEVICE} /opt/vault/data ext4 defaults,nofail 0 2" >> /etc/fstab
+if ! grep -q '/opt/vault/data' /etc/fstab; then
+  echo "$${DEVICE} /opt/vault/data ext4 defaults,nofail 0 2" >>/etc/fstab
+fi
 
 # Install Vault Enterprise
 curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 
 echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
-  > /etc/apt/sources.list.d/hashicorp.list
+  >/etc/apt/sources.list.d/hashicorp.list
 
 apt-get update -y
 apt-get install -y vault-enterprise=${vault_version}
@@ -38,36 +63,42 @@ apt-get install -y vault-enterprise=${vault_version}
 # Retrieve secrets from AWS Secrets Manager
 REGION="${region}"
 
-VAULT_LICENSE=$(aws secretsmanager get-secret-value \
-  --region "$${REGION}" \
-  --secret-id "${vault_license_secret_arn}" \
-  --query SecretString --output text)
+get_secret() {
+  local secret_id="$${1}"
+  local attempt=0
+  local max_retries=5
 
-CA_CERT=$(aws secretsmanager get-secret-value \
-  --region "$${REGION}" \
-  --secret-id "${vault_ca_cert_secret_arn}" \
-  --query SecretString --output text)
+  while [ "$${attempt}" -lt "$${max_retries}" ]; do
+    if RESULT=$(aws secretsmanager get-secret-value \
+      --region "$${REGION}" \
+      --secret-id "$${secret_id}" \
+      --query SecretString --output text 2>/dev/null); then
+      printf '%s' "$${RESULT}"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 5
+  done
 
-SERVER_CERT=$(aws secretsmanager get-secret-value \
-  --region "$${REGION}" \
-  --secret-id "${vault_server_cert_secret_arn}" \
-  --query SecretString --output text)
+  echo "ERROR: Failed to retrieve secret $${secret_id} after $${max_retries} attempts" >&2
+  return 1
+}
 
-SERVER_KEY=$(aws secretsmanager get-secret-value \
-  --region "$${REGION}" \
-  --secret-id "${vault_server_key_secret_arn}" \
-  --query SecretString --output text)
+VAULT_LICENSE=$(get_secret "${vault_license_secret_arn}")
+CA_CERT=$(get_secret "${vault_ca_cert_secret_arn}")
+SERVER_CERT=$(get_secret "${vault_server_cert_secret_arn}")
+SERVER_KEY=$(get_secret "${vault_server_key_secret_arn}")
 
 # Write TLS certificates
 mkdir -p /opt/vault/tls
-echo "$${CA_CERT}" > /opt/vault/tls/ca.crt
-echo "$${SERVER_CERT}" > /opt/vault/tls/server.crt
-echo "$${SERVER_KEY}" > /opt/vault/tls/server.key
+printf '%s\n' "$${CA_CERT}" >/opt/vault/tls/ca.crt
+printf '%s\n' "$${SERVER_CERT}" >/opt/vault/tls/server.crt
+printf '%s\n' "$${SERVER_KEY}" >/opt/vault/tls/server.key
 chmod 640 /opt/vault/tls/*
 chown vault:vault /opt/vault/tls/*
 
 # Write Vault license
-echo "$${VAULT_LICENSE}" > /opt/vault/vault.hclic
+printf '%s\n' "$${VAULT_LICENSE}" >/opt/vault/vault.hclic
 chmod 640 /opt/vault/vault.hclic
 chown vault:vault /opt/vault/vault.hclic
 
@@ -78,7 +109,7 @@ PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $${TOKEN}" \
   http://169.254.169.254/latest/meta-data/local-ipv4)
 
 # Write Vault configuration
-cat > /etc/vault.d/vault.hcl <<EOF
+cat >/etc/vault.d/vault.hcl <<EOF
 ui = true
 
 cluster_addr = "https://$${PRIVATE_IP}:8201"
