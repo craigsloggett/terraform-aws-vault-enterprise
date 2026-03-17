@@ -29,6 +29,8 @@ find_ebs_device() {
   attempts=0
   max_attempts=30
 
+  # Globbing is disabled globally (-f); re-enable locally for device discovery.
+  set +f
   while [ -z "$${device}" ]; do
     for dev in /dev/nvme*n1; do
       [ -b "$${dev}" ] || continue
@@ -48,6 +50,8 @@ find_ebs_device() {
       sleep 2
     fi
   done
+
+  set -f
 
   printf '%s\n' "$${device}"
 }
@@ -76,7 +80,6 @@ install_vault() {
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
     >/etc/apt/sources.list.d/hashicorp.list
 
-  export DEBIAN_FRONTEND=noninteractive
   apt-get -yq update >/dev/null
   apt-get -yq install vault-enterprise=${vault_version} >/dev/null
 }
@@ -155,8 +158,8 @@ main() {
   printf '%s\n' "$${ca_cert}" >/opt/vault/tls/ca.crt
   printf '%s\n' "$${server_cert}" >/opt/vault/tls/server.crt
   printf '%s\n' "$${server_key}" >/opt/vault/tls/server.key
-  chmod 640 /opt/vault/tls/*
-  chown vault:vault /opt/vault/tls/*
+  chmod 640 /opt/vault/tls/ca.crt /opt/vault/tls/server.crt /opt/vault/tls/server.key
+  chown vault:vault /opt/vault/tls/ca.crt /opt/vault/tls/server.crt /opt/vault/tls/server.key
 
   # Write Vault license.
   log "Writing the Vault license."
