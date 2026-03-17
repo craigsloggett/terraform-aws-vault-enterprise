@@ -1,83 +1,117 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Usage: ./initialize-cluster.sh
-set -euo pipefail
 
-echo "=== Reading Terraform outputs ==="
-BASTION_IP=$(terraform output -raw bastion_public_ip)
-VAULT_IP=$(terraform output -json vault_private_ips | jq -r '.[0]')
-VAULT_CA_CERT=$(terraform output -raw vault_ca_cert)
-
-echo "Bastion IP: ${BASTION_IP}"
-echo "Vault node: ${VAULT_IP}"
-echo ""
-
-SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR"
-
-# Write CA cert to a temporary file for the Vault CLI.
-CA_CERT_FILE=$(mktemp)
-SSH_SOCKET=$(mktemp -u)
-cleanup() {
-  rm -f "${CA_CERT_FILE}"
-  ssh -S "${SSH_SOCKET}" -O exit x 2>/dev/null
+log() {
+  printf '%b%s %b%s%b %s\n' \
+    "${c1}" "${3:-->}" "${c3}${2:+$c2}" "$1" "${c3}" "$2" >&2
 }
-trap cleanup EXIT
-printf '%s\n' "${VAULT_CA_CERT}" >"${CA_CERT_FILE}"
 
-# Open an SSH tunnel to the first Vault node through the bastion.
-echo "=== Opening SSH tunnel to ${VAULT_IP}:8200 ==="
-# shellcheck disable=SC2086
-ssh ${SSH_OPTS} -f -N -M -S "${SSH_SOCKET}" -L 8200:"${VAULT_IP}":8200 "ubuntu@${BASTION_IP}"
+read_terraform_outputs() {
+  log "Reading Terraform outputs."
 
-export VAULT_ADDR="https://127.0.0.1:8200"
-export VAULT_CACERT="${CA_CERT_FILE}"
+  bastion_ip=$(terraform output -raw bastion_public_ip)
+  vault_ip=$(terraform output -json vault_private_ips | jq -r '.[0]')
+  vault_ca_cert=$(terraform output -raw vault_ca_cert)
 
-# Wait for Vault to be reachable through the tunnel.
-echo "Waiting for Vault to be reachable..."
-ATTEMPTS=0
-MAX_ATTEMPTS=30
-while ! curl -sf --cacert "${CA_CERT_FILE}" "${VAULT_ADDR}/v1/sys/health?uninitcode=200&sealedcode=200" >/dev/null 2>&1; do
-  ATTEMPTS=$((ATTEMPTS + 1))
-  if [ "${ATTEMPTS}" -ge "${MAX_ATTEMPTS}" ]; then
-    echo "ERROR: Vault not reachable after ${MAX_ATTEMPTS} attempts."
-    exit 1
+  log "  Bastion IP:" "${bastion_ip}"
+  log "  Vault node:" "${vault_ip}"
+}
+
+setup_tunnel() {
+  log "Opening SSH tunnel to ${vault_ip}:8200."
+
+  ca_cert_file=$(mktemp)
+  ssh_socket=$(mktemp -u)
+  printf '%s\n' "${vault_ca_cert}" >"${ca_cert_file}"
+
+  # shellcheck disable=SC2086
+  ssh ${ssh_opts} -f -N -M -S "${ssh_socket}" \
+    -L 8200:"${vault_ip}":8200 "ubuntu@${bastion_ip}"
+
+  export VAULT_ADDR="https://127.0.0.1:8200"
+  export VAULT_CACERT="${ca_cert_file}"
+}
+
+cleanup() {
+  rm -f "${ca_cert_file}"
+  ssh -S "${ssh_socket}" -O exit x 2>/dev/null
+}
+
+wait_for_vault() {
+  log "Waiting for Vault to be reachable."
+
+  attempts=0
+  max_attempts=30
+  while ! curl -sf --cacert "${ca_cert_file}" \
+    "${VAULT_ADDR}/v1/sys/health?uninitcode=200&sealedcode=200" >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "${attempts}" -ge "${max_attempts}" ]; then
+      log "ERROR: Vault not reachable after ${max_attempts} attempts."
+      exit 1
+    fi
+    sleep 2
+  done
+
+  log "Vault is reachable."
+}
+
+initialize_vault() {
+  # Check if Vault is already initialized.
+  if vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null 2>&1; then
+    log "Vault is already initialized."
+    vault status
+    exit 0
   fi
-  sleep 2
-done
 
-echo "Vault is reachable."
-echo ""
+  log "Initializing Vault cluster."
 
-# Check if Vault is already initialized.
-if vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null 2>&1; then
-  echo "Vault is already initialized."
+  init_file="vault-init.json"
+  vault operator init -format=json >"${init_file}"
+  cat "${init_file}"
+
+  log "Initialization complete."
+  log "IMPORTANT: The root token and recovery keys have been saved to ${init_file}." "" "!!"
+  log "           Store this file securely and delete it from disk." "" "  "
+}
+
+wait_for_unseal() {
+  # The tunnel targets a single node which may be a standby, not the leader.
+  # The unsealed check is still valid; vault status at the end may show
+  # HA Mode: standby rather than active, which is expected.
+  log "Waiting for Vault to become active."
+
+  attempts=0
+  max_attempts=30
+  while ! vault status -format=json 2>/dev/null | jq -e '.sealed == false' >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "${attempts}" -ge "${max_attempts}" ]; then
+      log "ERROR: Vault did not unseal within ${max_attempts} attempts."
+      exit 1
+    fi
+    sleep 2
+  done
+
   vault status
-  exit 0
-fi
+}
 
-# Initialize the cluster.
-echo "=== Initializing Vault cluster ==="
-INIT_FILE="vault-init.json"
-vault operator init -format=json | tee "${INIT_FILE}"
+main() {
+  set -ef
 
-echo ""
-echo "=== Initialization complete ==="
-echo ""
-echo "IMPORTANT: The root token and recovery keys have been saved to ${INIT_FILE}."
-echo "           Store this file securely and delete it from disk."
-echo ""
+  ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR"
 
-# Wait for Vault to become active after initialization.
-echo "Waiting for Vault to become active..."
-ATTEMPTS=0
-MAX_ATTEMPTS=30
-while ! vault status -format=json 2>/dev/null | jq -e '.sealed == false' >/dev/null 2>&1; do
-  ATTEMPTS=$((ATTEMPTS + 1))
-  if [ "${ATTEMPTS}" -ge "${MAX_ATTEMPTS}" ]; then
-    echo "WARNING: Vault did not unseal within ${MAX_ATTEMPTS} attempts."
-    exit 1
-  fi
-  sleep 2
-done
+  # Colors are automatically disabled if output is not a terminal.
+  ! [ -t 2 ] || {
+    c1='\033[1;33m'
+    c2='\033[1;34m'
+    c3='\033[m'
+  }
 
-echo ""
-vault status
+  read_terraform_outputs
+  trap cleanup EXIT
+  setup_tunnel
+  wait_for_vault
+  initialize_vault
+  wait_for_unseal
+}
+
+main "$@"
