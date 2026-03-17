@@ -23,6 +23,11 @@ output "vault_snapshot_bucket" {
   value       = aws_s3_bucket.vault_snapshots.id
 }
 
+output "vault_target_group_arn" {
+  description = "ARN of the Vault NLB target group."
+  value       = aws_lb_target_group.vault.arn
+}
+
 output "vault_ca_cert" {
   description = "CA certificate for trusting the Vault TLS chain."
   value       = tls_self_signed_cert.ca.cert_pem

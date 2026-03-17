@@ -13,6 +13,11 @@ output "vault_private_ips" {
   value       = module.vault.vault_private_ips
 }
 
+output "vault_target_group_arn" {
+  description = "ARN of the Vault NLB target group."
+  value       = module.vault.vault_target_group_arn
+}
+
 output "vault_ca_cert" {
   description = "CA certificate for trusting the Vault TLS chain."
   value       = module.vault.vault_ca_cert
