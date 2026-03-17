@@ -36,8 +36,6 @@ find_ebs_device() {
   attempts=0
   max_attempts=30
 
-  # Globbing is disabled globally (-f); re-enable locally for device discovery.
-  set +f
   while [ -z "$${device}" ]; do
     for dev in /dev/nvme*n1; do
       [ -b "$${dev}" ] || continue
@@ -57,8 +55,6 @@ find_ebs_device() {
       sleep 2
     fi
   done
-
-  set -f
 
   printf '%s\n' "$${device}"
 }
