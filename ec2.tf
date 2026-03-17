@@ -37,7 +37,7 @@ resource "aws_instance" "vault" {
 
   user_data = templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
     vault_version                = var.vault_package_version
-    vault_fqdn                   = local.vault_fqdn
+    vault_fqdn                   = trimsuffix(aws_route53_record.vault.fqdn, ".")
     node_id                      = "vault-${count.index}"
     region                       = data.aws_region.current.name
     kms_key_id                   = aws_kms_key.vault.key_id
@@ -47,7 +47,6 @@ resource "aws_instance" "vault" {
     vault_server_key_secret_arn  = aws_secretsmanager_secret.vault_server_key.arn
     cluster_tag_key              = local.cluster_tag_key
     cluster_tag_value            = local.cluster_tag_value
-    nat_gateway_id               = module.vpc.natgw_ids[0]
   })
 
   tags = merge(var.common_tags, {
