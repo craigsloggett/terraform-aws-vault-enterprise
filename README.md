@@ -136,5 +136,6 @@ module "vault" {
 | <a name="output_vault_kms_key_id"></a> [vault\_kms\_key\_id](#output\_vault\_kms\_key\_id) | KMS key ID used for Vault auto-unseal. |
 | <a name="output_vault_private_ips"></a> [vault\_private\_ips](#output\_vault\_private\_ips) | Private IPs of the Vault nodes. |
 | <a name="output_vault_snapshot_bucket"></a> [vault\_snapshot\_bucket](#output\_vault\_snapshot\_bucket) | S3 bucket for Vault snapshots. |
+| <a name="output_vault_target_group_arn"></a> [vault\_target\_group\_arn](#output\_vault\_target\_group\_arn) | ARN of the Vault NLB target group. |
 | <a name="output_vault_url"></a> [vault\_url](#output\_vault\_url) | URL of the Vault cluster. |
 <!-- END_TF_DOCS -->
