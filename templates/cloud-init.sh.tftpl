@@ -180,7 +180,7 @@ main() {
   log "Generating the /etc/vault.d/vault.hcl configuration file."
   cat >/etc/vault.d/vault.hcl <<EOF
 ui = true
-disable_mlock = true
+disable_mlock = false
 
 cluster_addr = "https://$${private_ip}:8201"
 api_addr     = "https://${vault_fqdn}:8200"
