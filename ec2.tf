@@ -47,6 +47,7 @@ resource "aws_instance" "vault" {
     vault_server_key_secret_arn  = aws_secretsmanager_secret.vault_server_key.arn
     cluster_tag_key              = local.cluster_tag_key
     cluster_tag_value            = local.cluster_tag_value
+    nat_gateway_id               = module.vpc.natgw_ids[0]
   })
 
   tags = merge(var.common_tags, {
@@ -55,7 +56,6 @@ resource "aws_instance" "vault" {
   })
 
   depends_on = [
-    module.vpc,
     aws_iam_role_policy.vault_kms,
     aws_iam_role_policy.vault_secrets_manager,
   ]

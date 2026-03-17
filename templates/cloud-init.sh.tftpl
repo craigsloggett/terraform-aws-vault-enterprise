@@ -3,6 +3,19 @@
 # shellcheck disable=SC2034,SC2086,SC2154,SC2157,SC2170,SC2193
 set -euo pipefail
 
+# Verify outbound connectivity through NAT gateway (${nat_gateway_id})
+# before attempting package installation.
+ATTEMPTS=0
+MAX_ATTEMPTS=30
+until curl -sf --max-time 5 -o /dev/null https://apt.releases.hashicorp.com; do
+  ATTEMPTS=$((ATTEMPTS + 1))
+  if [ "$${ATTEMPTS}" -ge "$${MAX_ATTEMPTS}" ]; then
+    echo "ERROR: No outbound connectivity after $${MAX_ATTEMPTS} attempts" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
 # Install dependencies
 apt-get update -y
 apt-get install -y \
