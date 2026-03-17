@@ -32,3 +32,6 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Vault initialization output (contains root token and recovery keys)
+vault-init.json
