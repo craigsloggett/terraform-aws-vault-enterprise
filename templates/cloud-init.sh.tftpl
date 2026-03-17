@@ -90,10 +90,10 @@ install_vault() {
 get_secret() {
   log "  Grabbing AWS Secrets Manager secret value for:" "$1"
 
-  attempt=0
-  max_retries=5
+  attempts=0
+  max_attempts=5
 
-  while [ "$${attempt}" -lt "$${max_retries}" ]; do
+  while true; do
     if result=$(aws secretsmanager get-secret-value \
       --region "${region}" \
       --secret-id "$1" \
@@ -101,12 +101,13 @@ get_secret() {
       printf '%s' "$${result}"
       return 0
     fi
-    attempt=$((attempt + 1))
+    attempts=$((attempts + 1))
+    if [ "$${attempts}" -ge "$${max_attempts}" ]; then
+      log "ERROR: Failed to retrieve secret after $${max_attempts} attempts." "$1"
+      return 1
+    fi
     sleep 5
   done
-
-  log "ERROR: Failed to retrieve secret after $${max_retries} attempts." "$1"
-  return 1
 }
 
 get_ec2_private_ip_address() {
