@@ -47,6 +47,7 @@ resource "aws_instance" "vault" {
     vault_server_key_secret_arn  = aws_secretsmanager_secret.vault_server_key.arn
     cluster_tag_key              = local.cluster_tag_key
     cluster_tag_value            = local.cluster_tag_value
+    ebs_device_name              = local.ebs_device_name
   })
 
   tags = merge(var.common_tags, {
@@ -83,7 +84,7 @@ resource "aws_ebs_volume" "vault" {
 resource "aws_volume_attachment" "vault" {
   count = local.vault_node_count
 
-  device_name = "/dev/xvdf"
+  device_name = local.ebs_device_name
   volume_id   = aws_ebs_volume.vault[count.index].id
   instance_id = aws_instance.vault[count.index].id
 }

@@ -30,19 +30,19 @@ install_packages() {
 }
 
 find_ebs_device() {
-  log "  Resolving the NVMe device for the /dev/xvdf EBS attachment."
+  log "  Resolving the NVMe device for the ${ebs_device_name} EBS attachment."
 
   device=""
   attempts=0
   max_attempts=30
 
-  # Re-enable globbing within this subshell; -f is inherited from main().
+  # Re-enable globbing within this block; -f is inherited from main().
   set +f
   while [ -z "$${device}" ]; do
     for dev in /dev/nvme*n1; do
       [ -b "$${dev}" ] || continue
-      serial=$(nvme id-ctrl -v "$${dev}" 2>/dev/null | sed -n 's/^sn *: *//p' | tr -d ' ')
-      if [ "$${serial}" = "xvdf" ]; then
+      block_dev=$(ebsnvme-id -b "$${dev}" 2>/dev/null)
+      if [ "$${block_dev}" = "${ebs_device_name}" ]; then
         device="$${dev}"
         break
       fi
@@ -141,7 +141,7 @@ main() {
 
   # Install dependencies.
   log "Setting up system packages."
-  install_packages awscli jq unzip gnupg lsb-release nvme-cli
+  install_packages awscli jq unzip gnupg lsb-release nvme-cli amazon-ec2-utils
 
   # Format and mount the EBS volume for Raft storage.
   log "Setting up EBS storage."
@@ -180,6 +180,7 @@ main() {
   log "Generating the /etc/vault.d/vault.hcl configuration file."
   cat >/etc/vault.d/vault.hcl <<EOF
 ui = true
+disable_mlock = true
 
 cluster_addr = "https://$${private_ip}:8201"
 api_addr     = "https://${vault_fqdn}:8200"
@@ -217,9 +218,9 @@ EOF
   # Set permissions on data directory.
   chown -R vault:vault /opt/vault/data
 
-  # Enable the Vault service (but do not start — initialization is manual).
+  # Enable and start the Vault service.
   log "Enabling the Vault service."
-  systemctl enable vault
+  systemctl enable --now vault
 }
 
 main "$@"
