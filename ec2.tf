@@ -39,7 +39,7 @@ resource "aws_instance" "vault" {
     vault_version                = var.vault_package_version
     vault_fqdn                   = trimsuffix(aws_route53_record.vault.fqdn, ".")
     node_id                      = "vault-${count.index}"
-    region                       = data.aws_region.current.name
+    region                       = data.aws_region.current.region
     kms_key_alias                = aws_kms_alias.vault.name
     vault_license_secret_arn     = aws_secretsmanager_secret.vault_license.arn
     vault_ca_cert_secret_arn     = aws_secretsmanager_secret.vault_ca_cert.arn
