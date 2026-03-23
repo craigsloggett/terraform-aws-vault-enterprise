@@ -128,3 +128,27 @@ variable "vault_api_allowed_cidrs" {
   description = "CIDR blocks allowed to reach the Vault API (port 8200) from outside the VPC. Only effective when nlb_internal is false."
   default     = []
 }
+
+# Snapshots
+
+variable "vault_snapshot_interval" {
+  type        = string
+  description = "Interval between automated Raft snapshots (e.g., 1h, 30m, 24h)."
+  default     = "1h"
+
+  validation {
+    condition     = can(regex("^\\d+[hms]$", var.vault_snapshot_interval))
+    error_message = "Must be a valid Go duration string (e.g., 1h, 30m, 24h)."
+  }
+}
+
+variable "vault_snapshot_retain" {
+  type        = number
+  description = "Number of automated Raft snapshots to retain in S3."
+  default     = 72
+
+  validation {
+    condition     = var.vault_snapshot_retain >= 1
+    error_message = "Must retain at least 1 snapshot."
+  }
+}

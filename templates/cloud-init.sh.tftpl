@@ -125,6 +125,57 @@ get_ec2_private_ip_address() {
     http://169.254.169.254/latest/meta-data/local-ipv4
 }
 
+configure_snapshot_agent() {
+  log "Configuring the Vault snapshot agent."
+
+  # Write the snapshot agent configuration.
+  log "  Writing /etc/vault.d/snapshot-agent.hcl."
+  cat >/etc/vault.d/snapshot-agent.hcl <<EOF
+snapshot_agent {
+  enabled           = true
+  interval          = "${vault_snapshot_interval}"
+  retain            = ${vault_snapshot_retain}
+  file_prefix       = "vault-snap"
+  storage_type      = "aws-s3"
+  aws_s3_bucket     = "${vault_snapshot_bucket}"
+  aws_s3_region     = "${region}"
+  aws_s3_key_prefix = "snapshots/"
+}
+EOF
+  chown vault:vault /etc/vault.d/snapshot-agent.hcl
+  chmod 640 /etc/vault.d/snapshot-agent.hcl
+
+  # Write the token placeholder for the snapshot agent.
+  log "  Writing /etc/vault.d/snapshot-token placeholder."
+  printf 'VAULT_TOKEN=\n' >/etc/vault.d/snapshot-token
+  chown vault:vault /etc/vault.d/snapshot-token
+  chmod 600 /etc/vault.d/snapshot-token
+
+  # Write the systemd unit for the snapshot agent.
+  log "  Writing /etc/systemd/system/vault-snapshot-agent.service."
+  cat >/etc/systemd/system/vault-snapshot-agent.service <<'UNIT'
+[Unit]
+Description=Vault Snapshot Agent
+Requires=vault.service
+After=vault.service
+
+[Service]
+User=vault
+Group=vault
+Environment=VAULT_ADDR=https://127.0.0.1:8200
+Environment=VAULT_CACERT=/opt/vault/tls/ca.crt
+EnvironmentFile=/etc/vault.d/snapshot-token
+ExecStart=/usr/bin/vault operator raft snapshot agent /etc/vault.d/snapshot-agent.hcl
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  systemctl daemon-reload
+}
+
 main() {
   # Globally disable globbing and enable exit-on-error.
   set -ef
@@ -217,6 +268,9 @@ EOF
 
   # Set permissions on data directory.
   chown -R vault:vault /opt/vault/data
+
+  # Configure the snapshot agent (not started until operator provides a token).
+  configure_snapshot_agent
 
   # Enable and start the Vault service.
   log "Enabling the Vault service."
