@@ -137,9 +137,10 @@ snapshot_agent {
   retain            = ${vault_snapshot_retain}
   file_prefix       = "vault-snap"
   storage_type      = "aws-s3"
-  aws_s3_bucket     = "${vault_snapshot_bucket}"
-  aws_s3_region     = "${region}"
-  aws_s3_key_prefix = "snapshots/"
+  aws_s3_bucket                 = "${vault_snapshot_bucket}"
+  aws_s3_region                 = "${region}"
+  aws_s3_key_prefix             = "snapshots/"
+  aws_s3_server_side_encryption = true
 }
 EOF
   chown vault:vault /etc/vault.d/snapshot-agent.hcl
