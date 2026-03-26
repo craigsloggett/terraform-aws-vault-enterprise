@@ -220,18 +220,7 @@ EOF
 
   # Write the snapshot configuration for the operator to apply post-init.
   log "Writing the snapshot configuration."
-  cat >/etc/vault.d/snapshot.json <<EOF
-{
-  "storage_type":      "aws-s3",
-  "aws_s3_bucket":     "${vault_snapshot_bucket}",
-  "aws_s3_region":     "${region}",
-  "aws_s3_enable_kms": "true",
-  "path_prefix":       "snapshots/",
-  "interval":          ${vault_snapshot_interval},
-  "retain":            ${vault_snapshot_retain},
-  "file_prefix":       "vault-snap"
-}
-EOF
+  printf '%s\n' '${snapshot_config}' >/etc/vault.d/snapshot.json
   chown vault:vault /etc/vault.d/snapshot.json
   chmod 640 /etc/vault.d/snapshot.json
 
