@@ -12,9 +12,20 @@ read_terraform_outputs() {
   bastion_ip=$(terraform output -raw bastion_public_ip)
   vault_ip=$(terraform output -json vault_private_ips | jq -r '.[0]')
   vault_ca_cert=$(terraform output -raw vault_ca_cert)
+  ami_name=$(terraform output -raw ec2_ami_name)
+
+  case "${ami_name}" in
+    *ubuntu*) ssh_user="ubuntu" ;;
+    *debian*) ssh_user="admin" ;;
+    *)
+      log "ERROR: Unsupported AMI:" "${ami_name}"
+      exit 1
+      ;;
+  esac
 
   log "  Bastion IP:" "${bastion_ip}"
   log "  Vault node:" "${vault_ip}"
+  log "  SSH user:" "${ssh_user}"
 }
 
 setup_tunnel() {
@@ -26,7 +37,7 @@ setup_tunnel() {
 
   # shellcheck disable=SC2086
   ssh ${ssh_opts} -f -N -M -S "${ssh_socket}" \
-    -L 8200:"${vault_ip}":8200 "ubuntu@${bastion_ip}"
+    -L 8200:"${vault_ip}":8200 "${ssh_user}@${bastion_ip}"
 
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_CACERT="${ca_cert_file}"

@@ -80,30 +80,29 @@ data "aws_route53_zone" "selected" {
   name = var.route53_zone_name
 }
 
-data "aws_ami" "debian" {
+data "aws_ami" "selected" {
   most_recent = true
-  owners      = ["136693071363"]
+  owners      = [var.ec2_ami_owner]
 
   filter {
     name   = "name"
-    values = ["debian-13-amd64-*"]
-  }
-
-  filter {
-    name   = "architecture"
-    values = ["x86_64"]
+    values = [var.ec2_ami_name]
   }
 }
 
 module "vault" {
   # tflint-ignore: terraform_module_pinned_source
-  source = "git::https://github.com/craigsloggett/terraform-aws-vault-enterprise"
+  #source = "git::https://github.com/craigsloggett/terraform-aws-vault-enterprise"
+  source = "../../"
 
-  project_name      = "vault-enterprise"
+  project_name      = var.project_name
   route53_zone      = data.aws_route53_zone.selected
   vault_license     = var.vault_license
   ec2_key_pair_name = var.ec2_key_pair_name
-  ec2_ami           = data.aws_ami.debian
+  ec2_ami           = data.aws_ami.selected
+
+  nlb_internal            = var.nlb_internal
+  vault_api_allowed_cidrs = var.vault_api_allowed_cidrs
 }
 ```
 
@@ -216,6 +215,7 @@ module "vault" {
 | Name | Description |
 |------|-------------|
 | <a name="output_bastion_public_ip"></a> [bastion\_public\_ip](#output\_bastion\_public\_ip) | Public IP of the bastion host. |
+| <a name="output_ec2_ami_name"></a> [ec2\_ami\_name](#output\_ec2\_ami\_name) | Name of the AMI used for EC2 instances. |
 | <a name="output_vault_ca_cert"></a> [vault\_ca\_cert](#output\_vault\_ca\_cert) | CA certificate for trusting the Vault TLS chain. |
 | <a name="output_vault_kms_key_id"></a> [vault\_kms\_key\_id](#output\_vault\_kms\_key\_id) | KMS key ID used for Vault auto-unseal. |
 | <a name="output_vault_private_ips"></a> [vault\_private\_ips](#output\_vault\_private\_ips) | Private IPs of the Vault nodes. |
