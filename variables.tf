@@ -132,13 +132,13 @@ variable "vault_api_allowed_cidrs" {
 # Snapshots
 
 variable "vault_snapshot_interval" {
-  type        = string
-  description = "Interval between automated Raft snapshots (e.g., 1h, 30m, 24h)."
-  default     = "1h"
+  type        = number
+  description = "Seconds between automated Raft snapshots."
+  default     = 3600
 
   validation {
-    condition     = can(regex("^\\d+[hms]$", var.vault_snapshot_interval))
-    error_message = "Must be a valid Go duration string (e.g., 1h, 30m, 24h)."
+    condition     = var.vault_snapshot_interval >= 60
+    error_message = "Must be at least 60 seconds."
   }
 }
 

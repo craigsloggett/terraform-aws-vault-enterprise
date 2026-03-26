@@ -85,6 +85,20 @@ initialize_vault() {
   log "           Store this file securely and delete it from disk." "" "  "
 }
 
+configure_snapshots() {
+  log "Configuring automated Raft snapshots."
+
+  # shellcheck disable=SC2086
+  ssh ${ssh_opts} -J "${ssh_user}@${bastion_ip}" "${ssh_user}@${vault_ip}" \
+    "sudo VAULT_ADDR=https://127.0.0.1:8200 \
+          VAULT_CACERT=/opt/vault/tls/ca.crt \
+          VAULT_TOKEN=$(jq -r '.root_token' vault-init.json) \
+      vault write sys/storage/raft/snapshot-auto/config/hourly \
+        @/etc/vault.d/snapshot.json"
+
+  log "  Automated snapshots configured."
+}
+
 wait_for_unseal() {
   # The tunnel targets a single node which may be a standby, not the leader.
   # The unsealed check is still valid; vault status at the end may show
@@ -123,6 +137,7 @@ main() {
   wait_for_vault
   initialize_vault
   wait_for_unseal
+  configure_snapshots
 }
 
 main "$@"

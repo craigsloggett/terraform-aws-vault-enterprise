@@ -61,24 +61,6 @@ data "aws_iam_policy_document" "vault_snapshots" {
       values   = ["false"]
     }
   }
-
-  statement {
-    sid       = "DenyUnencryptedUploads"
-    effect    = "Deny"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.vault_snapshots.arn}/*"]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    condition {
-      test     = "StringNotEquals"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["aws:kms"]
-    }
-  }
 }
 
 resource "aws_s3_bucket_policy" "vault_snapshots" {

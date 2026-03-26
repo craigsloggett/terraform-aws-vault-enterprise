@@ -23,6 +23,11 @@ output "ec2_ami_name" {
   value       = module.vault.ec2_ami_name
 }
 
+output "vault_snapshot_bucket" {
+  description = "S3 bucket for Vault snapshots."
+  value       = module.vault.vault_snapshot_bucket
+}
+
 output "vault_ca_cert" {
   description = "CA certificate for trusting the Vault TLS chain."
   value       = module.vault.vault_ca_cert
