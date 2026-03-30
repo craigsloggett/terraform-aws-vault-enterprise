@@ -9,10 +9,11 @@ log() {
 read_terraform_outputs() {
   log "Reading Terraform outputs."
 
-  bastion_ip=$(terraform output -raw bastion_public_ip)
-  vault_ip=$(terraform output -json vault_private_ips | jq -r '.[0]')
-  vault_ca_cert=$(terraform output -raw vault_ca_cert)
-  ami_name=$(terraform output -raw ec2_ami_name)
+  repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+  bastion_ip=$(cd "${repo_root}" && terraform output -raw bastion_public_ip)
+  vault_ip=$(cd "${repo_root}" && terraform output -json vault_private_ips | jq -r '.[0]')
+  vault_ca_cert=$(cd "${repo_root}" && terraform output -raw vault_ca_cert)
+  ami_name=$(cd "${repo_root}" && terraform output -raw ec2_ami_name)
 
   case "${ami_name}" in
     *ubuntu*) ssh_user="ubuntu" ;;
@@ -67,6 +68,8 @@ wait_for_vault() {
 }
 
 initialize_vault() {
+  init_file="$(cd "$(dirname "$0")" && pwd)/vault-init.json"
+
   # Check if Vault is already initialized.
   if vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null 2>&1; then
     log "Vault is already initialized."
@@ -76,27 +79,28 @@ initialize_vault() {
 
   log "Initializing Vault cluster."
 
-  init_file="vault-init.json"
   vault operator init -format=json >"${init_file}"
   cat "${init_file}"
 
   log "Initialization complete."
-  log "IMPORTANT: The root token and recovery keys have been saved to ${init_file}." "" "!!"
+  log "IMPORTANT: The root token and recovery keys have been saved to vault-init.json." "" "!!"
   log "           Store this file securely and delete it from disk." "" "  "
 }
 
 configure_snapshots() {
+  init_file="$(cd "$(dirname "$0")" && pwd)/vault-init.json"
+
+  if [ ! -f "${init_file}" ]; then
+    log "Skipping snapshot configuration (vault-init.json not found)."
+    return
+  fi
+
   log "Configuring automated Raft snapshots."
 
   export VAULT_TOKEN
-  VAULT_TOKEN=$(jq -r '.root_token' vault-init.json)
+  VAULT_TOKEN=$(jq -r '.root_token' "${init_file}")
 
   # Fetch the snapshot config from the Vault node and apply it via the tunnel.
-  # Accept the bastion host key if not already known.
-  if ! ssh-keygen -F "${bastion_ip}" >/dev/null 2>&1; then
-    ssh-keyscan -H "${bastion_ip}" >>~/.ssh/known_hosts 2>/dev/null
-  fi
-
   # shellcheck disable=SC2086
   ssh ${ssh_opts} -J "${ssh_user}@${bastion_ip}" "${ssh_user}@${vault_ip}" \
     "sudo cat /etc/vault.d/snapshot.json" |
@@ -128,7 +132,7 @@ wait_for_unseal() {
 main() {
   set -ef
 
-  ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR"
+  ssh_opts="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 
   # Colors are automatically disabled if output is not a terminal.
   ! [ -t 2 ] || {
