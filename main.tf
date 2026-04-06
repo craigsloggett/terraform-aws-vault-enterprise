@@ -18,6 +18,13 @@ locals {
   cluster_tag_value = var.project_name
   ebs_device_name   = "/dev/xvdf" # AWS convention for the first additional EBS volume
 
+  config_snapshot_json = templatefile("${path.module}/templates/snapshot.json.tftpl", {
+    aws_s3_bucket = aws_s3_bucket.vault_snapshots.id
+    aws_s3_region = data.aws_region.current.region
+    interval      = var.vault_snapshot_interval
+    retain        = var.vault_snapshot_retain
+  })
+
   vpc = var.existing_vpc != null ? {
     id                 = var.existing_vpc.vpc_id
     cidr               = data.aws_vpc.existing[0].cidr_block

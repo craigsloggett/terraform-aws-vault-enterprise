@@ -37,24 +37,23 @@ resource "aws_instance" "vault" {
 
   user_data = templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
     vault_version                = var.vault_package_version
-    vault_fqdn                   = trimsuffix(aws_route53_record.vault.fqdn, ".")
-    node_id                      = "vault-${count.index}"
     region                       = data.aws_region.current.region
-    kms_key_alias                = aws_kms_alias.vault.name
+    ebs_device_name              = local.ebs_device_name
     vault_license_secret_arn     = aws_secretsmanager_secret.vault_license.arn
     vault_ca_cert_secret_arn     = aws_secretsmanager_secret.vault_ca_cert.arn
     vault_server_cert_secret_arn = aws_secretsmanager_secret.vault_server_cert.arn
     vault_server_key_secret_arn  = aws_secretsmanager_secret.vault_server_key.arn
-    cluster_tag_key              = local.cluster_tag_key
-    cluster_tag_value            = local.cluster_tag_value
-    ebs_device_name              = local.ebs_device_name
 
-    snapshot_config = templatefile("${path.module}/templates/snapshot.json.tftpl", {
-      aws_s3_bucket = aws_s3_bucket.vault_snapshots.id
-      aws_s3_region = data.aws_region.current.region
-      interval      = var.vault_snapshot_interval
-      retain        = var.vault_snapshot_retain
+    config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
+      vault_fqdn        = trimsuffix(aws_route53_record.vault.fqdn, ".")
+      node_id           = "vault-${count.index}"
+      region            = data.aws_region.current.region
+      kms_key_alias     = aws_kms_alias.vault.name
+      cluster_tag_key   = local.cluster_tag_key
+      cluster_tag_value = local.cluster_tag_value
     })
+
+    config_snapshot_json = local.config_snapshot_json
   })
 
   tags = merge(var.common_tags, {
