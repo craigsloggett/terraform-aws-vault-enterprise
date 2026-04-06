@@ -19,8 +19,9 @@ resource "aws_lb_target_group" "vault" {
 
   health_check {
     enabled             = true
-    protocol            = "TCP"
+    protocol            = "HTTPS"
     port                = "8200"
+    path                = "/v1/sys/health?standbyok=true&perfstandbyok=true"
     healthy_threshold   = 3
     unhealthy_threshold = 3
     interval            = 30
