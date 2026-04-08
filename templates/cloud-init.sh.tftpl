@@ -165,9 +165,24 @@ prepare_system() {
 
   apt-get -yq update >/dev/null
   apt-get -yq install \
-    awscli jq unzip gnupg lsb-release nvme-cli amazon-ec2-utils >/dev/null
+    awscli jq unzip gnupg lsb-release nvme-cli amazon-ec2-utils chrony >/dev/null
 
   # The vault-enterprise package creates the vault user, so no useradd here.
+}
+
+# ---------------------------------------------------------------------------
+# Time synchronization — required before any AWS Secrets Manager calls
+# ---------------------------------------------------------------------------
+
+configure_time() {
+  log_info "Configuring system time"
+
+  timedatectl set-timezone UTC
+  log_info "Timezone set to UTC"
+
+  systemctl enable --now chrony
+  chronyc makestep
+  log_info "Time synchronization complete"
 }
 
 # ---------------------------------------------------------------------------
@@ -349,6 +364,7 @@ main() {
   log_info "Instance $${instance_id} at $${private_ip}"
 
   prepare_system
+  configure_time
   mount_data_volume
   install_vault
 
