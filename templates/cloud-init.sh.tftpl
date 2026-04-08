@@ -562,8 +562,8 @@ configure_pki_engine() {
   vault secrets tune -max-lease-ttl=87600h pki
 
   # Generate root CA with ECDSA P-384 keys, consistent with the bootstrap
-  # CA and server certs in tls.tf. OCSP is not configured — CRL distribution
-  # is used instead.
+  # CA and server certs in tls.tf. OCSP is not configured (CRL distribution
+  # is used instead).
   vault write -format=json pki/root/generate/internal \
     common_name="${cluster_tag_value} CA" \
     ttl=87600h \
