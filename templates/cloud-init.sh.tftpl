@@ -70,6 +70,10 @@ secret_vault_server_key="${vault_server_key_secret_arn}"
 cluster_tag_key="${cluster_tag_key}"
 cluster_tag_value="${cluster_tag_value}"
 ssm_cluster_state_name="${ssm_cluster_state_name}"
+ssm_pki_state_name="${ssm_pki_state_name}"
+ssm_pki_ca_cert_name="${ssm_pki_ca_cert_name}"
+vault_fqdn="${vault_fqdn}"
+vault_iam_role_arn="${vault_iam_role_arn}"
 secret_vault_root_token="${vault_root_token_secret_arn}"
 secret_vault_recovery_keys="${vault_recovery_keys_secret_arn}"
 
@@ -528,6 +532,112 @@ join_cluster() {
 }
 
 # ---------------------------------------------------------------------------
+# Authenticate with Vault using the root token (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+authenticate_vault() {
+  log_info "Authenticating with Vault using root token"
+
+  root_token="$(fetch_secret "$${secret_vault_root_token}")"
+
+  export VAULT_ADDR="https://127.0.0.1:8200"
+  export VAULT_TOKEN="$${root_token}"
+  export VAULT_CACERT="$${tls_ca_file}"
+
+  log_info "Vault authentication configured"
+}
+
+# ---------------------------------------------------------------------------
+# Configure the Vault PKI secrets engine (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+configure_pki_engine() {
+  log_info "Configuring Vault PKI secrets engine"
+
+  # Enable the PKI secrets engine if not already enabled.
+  if ! vault secrets list -format=json | jq -e '."pki/"' >/dev/null 2>&1; then
+    vault secrets enable pki
+  fi
+
+  vault secrets tune -max-lease-ttl=87600h pki
+
+  # Generate root CA with Ed25519 keys. Ed25519 CAs do not support OCSP in
+  # Vault PKI — CRL distribution is configured below instead.
+  vault write -format=json pki/root/generate/internal \
+    common_name="${cluster_tag_value} CA" \
+    ttl=87600h \
+    key_type=ed25519 |
+    jq -r '.data.certificate' >/dev/null
+
+  # Configure CRL and issuing certificate URLs. OCSP is intentionally omitted
+  # — Ed25519 root CAs do not support it in Vault PKI.
+  vault write pki/config/urls \
+    issuing_certificates="https://$${vault_fqdn}:8200/v1/pki/ca" \
+    crl_distribution_points="https://$${vault_fqdn}:8200/v1/pki/crl"
+
+  # Create the vault-server role used by nodes to issue their own TLS certs.
+  vault write pki/roles/vault-server \
+    allowed_domains="$${vault_fqdn}" \
+    allow_bare_domains=true \
+    allow_subdomains=false \
+    max_ttl=720h \
+    key_type=ec \
+    key_bits=384
+
+  # Publish the new CA cert PEM to SSM so follower nodes can fetch it and
+  # trust the new CA before attempting AWS auth. The CA cert is public
+  # material — it is the trust anchor, not the signing key.
+  log_info "Publishing PKI CA cert to SSM"
+  ca_cert_pem="$(vault read -field=certificate pki/cert/ca)"
+  aws ssm put-parameter \
+    --region "$${aws_region}" \
+    --name "$${ssm_pki_ca_cert_name}" \
+    --value "$${ca_cert_pem}" \
+    --overwrite
+
+  log_info "PKI secrets engine configured"
+}
+
+# ---------------------------------------------------------------------------
+# Configure the Vault AWS auth method (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+configure_aws_auth() {
+  log_info "Configuring Vault AWS auth method"
+
+  # Enable the AWS auth method if not already enabled.
+  if ! vault auth list -format=json | jq -e '."aws/"' >/dev/null 2>&1; then
+    vault auth enable aws
+  fi
+
+  # Write a policy granting nodes the ability to issue certs from the
+  # vault-server PKI role. No broader permissions are needed.
+  vault policy write vault-server - <<EOF
+path "pki/issue/vault-server" {
+  capabilities = ["create", "update"]
+}
+EOF
+
+  # Bind the Vault instance IAM role to the vault-server policy.
+  # Nodes authenticate by signing a GetCallerIdentity request with their
+  # instance profile credentials — no shared secrets.
+  vault write auth/aws/role/vault-server \
+    auth_type=iam \
+    bound_iam_principal_arn="$${vault_iam_role_arn}" \
+    policies=vault-server \
+    ttl=1h
+
+  log_info "Writing PKI state: ready"
+  aws ssm put-parameter \
+    --region "$${aws_region}" \
+    --name "$${ssm_pki_state_name}" \
+    --value "ready" \
+    --overwrite
+
+  log_info "AWS auth method configured"
+}
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
@@ -553,6 +663,9 @@ main() {
 
   if is_bootstrap_node; then
     init_cluster
+    authenticate_vault
+    configure_pki_engine
+    configure_aws_auth
   else
     join_cluster
   fi
