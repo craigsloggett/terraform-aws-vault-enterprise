@@ -32,7 +32,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "vault_snapshots" 
   bucket = aws_s3_bucket.vault_snapshots.id
 
   rule {
-    bucket_key_enabled = true
+    bucket_key_enabled       = true
+    blocked_encryption_types = ["SSE-C"]
 
     apply_server_side_encryption_by_default {
       sse_algorithm = "aws:kms"
