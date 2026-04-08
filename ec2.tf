@@ -44,6 +44,12 @@ resource "aws_instance" "vault" {
     vault_server_cert_secret_arn = aws_secretsmanager_secret.vault_server_cert.arn
     vault_server_key_secret_arn  = aws_secretsmanager_secret.vault_server_key.arn
 
+    cluster_tag_key                = local.cluster_tag_key
+    cluster_tag_value              = local.cluster_tag_value
+    ssm_cluster_state_name         = aws_ssm_parameter.vault_cluster_state.name
+    vault_root_token_secret_arn    = aws_secretsmanager_secret.vault_root_token.arn
+    vault_recovery_keys_secret_arn = aws_secretsmanager_secret.vault_recovery_keys.arn
+
     config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
       cluster_name      = var.project_name
       vault_fqdn        = trimsuffix(aws_route53_record.vault.fqdn, ".")
