@@ -561,16 +561,17 @@ configure_pki_engine() {
 
   vault secrets tune -max-lease-ttl=87600h pki
 
-  # Generate root CA with Ed25519 keys. Ed25519 CAs do not support OCSP in
-  # Vault PKI — CRL distribution is configured below instead.
+  # Generate root CA with ECDSA P-384 keys, consistent with the bootstrap
+  # CA and server certs in tls.tf. OCSP is not configured — CRL distribution
+  # is used instead.
   vault write -format=json pki/root/generate/internal \
     common_name="${cluster_tag_value} CA" \
     ttl=87600h \
-    key_type=ed25519 |
+    key_type=ec \
+    key_bits=384 |
     jq -r '.data.certificate' >/dev/null
 
-  # Configure CRL and issuing certificate URLs. OCSP is intentionally omitted
-  # — Ed25519 root CAs do not support it in Vault PKI.
+  # Configure CRL and issuing certificate URLs. OCSP is not configured.
   vault write pki/config/urls \
     issuing_certificates="https://$${vault_fqdn}:8200/v1/pki/ca" \
     crl_distribution_points="https://$${vault_fqdn}:8200/v1/pki/crl"
