@@ -104,3 +104,22 @@ resource "aws_iam_role_policy" "vault_ec2_describe" {
   role        = aws_iam_role.vault.id
   policy      = data.aws_iam_policy_document.vault_ec2_describe.json
 }
+
+# IAM (AWS auth method role ARN resolution)
+
+data "aws_iam_policy_document" "vault_iam_read" {
+  statement {
+    sid    = "ResolveIAMRoleARN"
+    effect = "Allow"
+    actions = [
+      "iam:GetRole",
+    ]
+    resources = [aws_iam_role.vault.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "vault_iam_read" {
+  name_prefix = "${var.project_name}-iam-read-"
+  role        = aws_iam_role.vault.id
+  policy      = data.aws_iam_policy_document.vault_iam_read.json
+}
