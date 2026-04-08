@@ -99,6 +99,26 @@ resource "aws_secretsmanager_secret_version" "vault_server_key" {
   secret_string = tls_private_key.server.private_key_pem
 }
 
+resource "aws_secretsmanager_secret_policy" "vault_server_key" {
+  secret_arn = aws_secretsmanager_secret.vault_server_key.arn
+  policy     = data.aws_iam_policy_document.vault_server_key.json
+}
+
+data "aws_iam_policy_document" "vault_server_key" {
+  statement {
+    sid    = "AllowVaultInstanceRole"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.vault.arn]
+    }
+
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.vault_server_key.arn]
+  }
+}
+
 resource "aws_secretsmanager_secret" "vault_license" {
   name_prefix = "${var.project_name}-vault-license-"
   description = "Vault Enterprise license"
