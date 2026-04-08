@@ -10,11 +10,12 @@ api_addr     = "https://${vault_fqdn}:8200"
 license_path = "/opt/vault/vault.hclic"
 
 listener "tcp" {
-  address            = "0.0.0.0:8200"
-  cluster_address    = "0.0.0.0:8201"
-  tls_cert_file      = "/opt/vault/tls/server.crt"
-  tls_key_file       = "/opt/vault/tls/server.key"
-  tls_client_ca_file = "/opt/vault/tls/ca.crt"
+  address                  = "0.0.0.0:8200"
+  cluster_address          = "0.0.0.0:8201"
+  tls_cert_file            = "/opt/vault/tls/server.crt"
+  tls_key_file             = "/opt/vault/tls/server.key"
+  tls_min_version          = "tls13"
+  tls_disable_client_certs = true
 }
 
 storage "raft" {
