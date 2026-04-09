@@ -125,7 +125,7 @@ variable "vault_subdomain" {
 
 variable "vault_version" {
   type        = string
-  description = "Vault Enterprise release version (e.g., 1.21.4+ent). Do not include the apt -1 suffix."
+  description = "Vault Enterprise release version (e.g., 1.21.4+ent)."
   default     = "1.21.4+ent"
 
   validation {

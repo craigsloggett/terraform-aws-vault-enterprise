@@ -292,6 +292,13 @@ create_vault_user() {
 
   groupadd --system vault
   useradd --system -g vault -d /etc/vault.d -s /bin/false vault
+
+  mkdir -p /etc/vault.d/tls
+  mkdir -p /opt/vault/tls
+  mkdir -p /opt/vault/data
+
+  chown -R vault:vault /etc/vault.d /opt/vault
+  chmod 750 /etc/vault.d /opt/vault
 }
 
 # ---------------------------------------------------------------------------
@@ -306,7 +313,7 @@ install_vault() {
   # Detect architecture
   machine="$(uname -m)"
   case "$${machine}" in
-    x86_64)  arch="amd64" ;;
+    x86_64) arch="amd64" ;;
     aarch64) arch="arm64" ;;
     *)
       log_error "Unsupported architecture: $${machine}"
