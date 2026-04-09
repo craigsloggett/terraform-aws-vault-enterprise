@@ -47,10 +47,5 @@ resource "aws_lb_listener" "vault" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "vault" {
-  count = local.vault_node_count
-
-  target_group_arn = aws_lb_target_group.vault.arn
-  target_id        = aws_instance.vault[count.index].id
-  port             = 8200
-}
+# Target group registration is handled by aws_autoscaling_group.vault
+# via the target_group_arns attribute.

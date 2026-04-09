@@ -92,10 +92,15 @@ variable "vault_server_instance_type" {
   default     = "m5.large"
 }
 
-variable "vault_ebs_volume_size" {
+variable "root_volume_size" {
   type        = number
-  description = "Size in GiB of the EBS volume for Vault Raft storage."
-  default     = 100
+  description = "Size in GiB of the root EBS volume for Vault nodes. Raft data is stored here when no separate data volume is attached."
+  default     = 50
+
+  validation {
+    condition     = var.root_volume_size >= 20
+    error_message = "Root volume must be at least 20 GiB."
+  }
 }
 
 variable "bastion_instance_type" {

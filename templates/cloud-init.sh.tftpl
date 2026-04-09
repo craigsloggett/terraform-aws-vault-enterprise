@@ -127,6 +127,11 @@ get_instance_id() {
   imds_get "instance-id" "$${token}"
 }
 
+get_availability_zone() {
+  token="$(imds_token)"
+  imds_get "placement/availability-zone" "$${token}"
+}
+
 # ---------------------------------------------------------------------------
 # AWS Secrets Manager helper
 # ---------------------------------------------------------------------------
@@ -254,8 +259,8 @@ mount_data_volume() {
   fi
 
   device="$(resolve_ebs_nvme_device "$${ebs_data_device_name}")" || {
-    log_error "No NVMe device found matching EBS attachment $${ebs_data_device_name}"
-    return 1
+    log_warn "No NVMe device found matching EBS attachment $${ebs_data_device_name} — using root volume for Raft data"
+    return 0
   }
 
   log_info "Matched $${ebs_data_device_name} -> $${device}"
@@ -417,6 +422,8 @@ write_secrets() {
 
 write_vault_config() {
   private_ip="$${1}"
+  instance_id="$${2}"
+  availability_zone="$${3}"
 
   log_info "Writing Vault configuration (bind=$${private_ip})"
 
@@ -875,8 +882,9 @@ main() {
 
   private_ip="$(get_private_ip)"
   instance_id="$(get_instance_id)"
+  availability_zone="$(get_availability_zone)"
 
-  log_info "Instance $${instance_id} at $${private_ip}"
+  log_info "Instance $${instance_id} at $${private_ip} in $${availability_zone}"
 
   prepare_system
   configure_time
@@ -886,7 +894,7 @@ main() {
   write_vault_systemd_unit
 
   write_secrets
-  write_vault_config "$${private_ip}"
+  write_vault_config "$${private_ip}" "$${instance_id}" "$${availability_zone}"
   write_snapshot_config
 
   start_services
