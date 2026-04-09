@@ -123,13 +123,13 @@ variable "vault_subdomain" {
   default     = "vault"
 }
 
-variable "vault_package_version" {
+variable "vault_version" {
   type        = string
   description = "Vault Enterprise release version (e.g., 1.21.4+ent). Do not include the apt -1 suffix."
   default     = "1.21.4+ent"
 
   validation {
-    condition     = can(regex("^\\d+\\.\\d+\\.\\d+\\+ent(\\.hsm)?(\\.fips1402)?$", var.vault_package_version))
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+\\+ent(\\.hsm)?(\\.fips1402)?$", var.vault_version))
     error_message = "Must be a valid Vault Enterprise release version (e.g., 1.21.4+ent, 1.21.4+ent.hsm, 1.21.4+ent.fips1402)."
   }
 }
