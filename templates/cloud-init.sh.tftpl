@@ -308,7 +308,7 @@ create_vault_user() {
 install_vault() {
   log_info "Installing Vault Enterprise $${vault_version}"
 
-  apt-get -yq install gnupg wget >/dev/null
+  apt-get -yq install gnupg >/dev/null
 
   # Detect architecture
   machine="$(uname -m)"
@@ -331,22 +331,22 @@ install_vault() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$${tmp_dir}"' EXIT
 
-  wget -q -P "$${tmp_dir}" \
-    "$${base_url}/$${zip_file}" \
-    "$${base_url}/$${sums_file}" \
-    "$${base_url}/$${sig_file}"
+  curl -fsSL -o "$${tmp_dir}" "$${base_url}/$${zip_file}"
+  curl -fsSL -o "$${tmp_dir}" "$${base_url}/$${sums_file}"
+  curl -fsSL -o "$${tmp_dir}" "$${base_url}/$${sig_file}"
 
   # GPG signature verification — isolated keyring to avoid polluting the system
   export GNUPGHOME="$${tmp_dir}/.gnupg"
   mkdir -p "$${GNUPGHOME}"
   chmod 0700 "$${GNUPGHOME}"
 
-  wget -q -O "$${tmp_dir}/hashicorp.asc" \
+  curl -fsSL -o "$${tmp_dir}/hashicorp.asc" \
     https://www.hashicorp.com/.well-known/pgp-key.txt
-  gpg --import "$${tmp_dir}/hashicorp.asc"
+  gpg --quiet --import "$${tmp_dir}/hashicorp.asc"
+  printf '%s\n' "C874011F0AB405110D02105534365D9472D7468F:6:" | gpg --quiet --import-ownertrust
 
   log_info "Verifying GPG signature"
-  gpg --trust-model direct --verify "$${tmp_dir}/$${sig_file}" "$${tmp_dir}/$${sums_file}"
+  gpg --quiet --verify "$${tmp_dir}/$${sig_file}" "$${tmp_dir}/$${sums_file}"
 
   # SHA256 checksum verification
   log_info "Verifying SHA256 checksum"
