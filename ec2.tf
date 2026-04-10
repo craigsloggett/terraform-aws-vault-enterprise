@@ -149,9 +149,9 @@ resource "aws_launch_template" "vault" {
 resource "aws_autoscaling_group" "vault" {
   name_prefix = "${var.project_name}-vault-"
 
-  min_size         = local.vault_node_count
-  max_size         = local.vault_node_count
-  desired_capacity = local.vault_node_count
+  min_size         = var.vault_node_count
+  max_size         = var.vault_node_count
+  desired_capacity = var.vault_node_count
 
   vpc_zone_identifier = local.vpc.private_subnet_ids
 
