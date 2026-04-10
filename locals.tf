@@ -17,11 +17,10 @@ locals {
   config_vault_service          = file("${path.module}/files/vault.service")
   config_vault_service_override = file("${path.module}/files/vault.service.d-override.conf")
 
-  # Vault Agent (wired into cloud-init in a later PR)
-  config_vault_agent_service       = file("${path.module}/files/vault-agent.service")          # tflint-ignore: terraform_unused_declarations
-  config_vault_agent_hcl           = file("${path.module}/files/vault-agent.hcl")              # tflint-ignore: terraform_unused_declarations
-  config_vault_agent_cert_template = file("${path.module}/files/vault-agent/server.crt.ctmpl") # tflint-ignore: terraform_unused_declarations
-  config_vault_agent_key_template  = file("${path.module}/files/vault-agent/server.key.ctmpl") # tflint-ignore: terraform_unused_declarations
+  config_vault_agent_service       = file("${path.module}/files/vault-agent.service")
+  config_vault_agent_hcl           = file("${path.module}/files/vault-agent.hcl")
+  config_vault_agent_cert_template = file("${path.module}/files/vault-agent/server.crt.ctmpl")
+  config_vault_agent_key_template  = file("${path.module}/files/vault-agent/server.key.ctmpl")
 
   config_snapshot_json = templatefile("${path.module}/templates/snapshot.json.tftpl", {
     aws_s3_bucket = aws_s3_bucket.vault_snapshots.id

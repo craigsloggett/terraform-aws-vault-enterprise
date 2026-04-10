@@ -36,6 +36,13 @@ vault_tls_ca_file="$${vault_tls_dir}/ca.crt"
 vault_tls_cert_file="$${vault_tls_dir}/server.crt"
 vault_tls_key_file="$${vault_tls_dir}/server.key"
 
+# Vault Agent Directories
+vault_agent_config_dir="/etc/vault-agent"
+vault_agent_runtime_dir="/opt/vault/agent"
+vault_agent_config_file="$${vault_agent_config_dir}/agent.hcl"
+vault_agent_cert_template_file="$${vault_agent_config_dir}/server.crt.ctmpl"
+vault_agent_key_template_file="$${vault_agent_config_dir}/server.key.ctmpl"
+
 # EBS Volume Paths
 ebs_raft_device_name="${ebs_raft_device_name}"
 ebs_raft_mount="$${vault_raft_dir}"
@@ -318,6 +325,14 @@ configure_vault_directories() {
   mkdir -p "$${vault_raft_dir}"
   chown vault:vault "$${vault_raft_dir}"
   chmod 700 "$${vault_raft_dir}"
+
+  mkdir -p "$${vault_agent_config_dir}"
+  chown root:vault "$${vault_agent_config_dir}"
+  chmod 750 "$${vault_agent_config_dir}"
+
+  mkdir -p "$${vault_agent_runtime_dir}"
+  chown vault:vault "$${vault_agent_runtime_dir}"
+  chmod 750 "$${vault_agent_runtime_dir}"
 }
 
 # ---------------------------------------------------------------------------
@@ -395,6 +410,44 @@ EOF
 ${config_vault_service_override}
 EOF
   chmod 0600 /etc/systemd/system/vault.service.d/override.conf
+}
+
+write_vault_agent_config() {
+  log_info "Writing Vault Agent configuration"
+
+  cat >"$${vault_agent_config_file}" <<'EOF'
+${config_vault_agent_hcl}
+EOF
+
+  chown vault:vault "$${vault_agent_config_file}"
+  chmod 0640 "$${vault_agent_config_file}"
+}
+
+write_vault_agent_templates() {
+  log_info "Writing Vault Agent consul-template files"
+
+  cat >"$${vault_agent_cert_template_file}" <<'EOF'
+${config_vault_agent_cert_template}
+EOF
+
+  cat >"$${vault_agent_key_template_file}" <<'EOF'
+${config_vault_agent_key_template}
+EOF
+
+  sed -i "s|VAULT_FQDN_PLACEHOLDER|$${vault_fqdn}|g" \
+    "$${vault_agent_cert_template_file}" \
+    "$${vault_agent_key_template_file}"
+
+  chown vault:vault "$${vault_agent_cert_template_file}" "$${vault_agent_key_template_file}"
+  chmod 0640 "$${vault_agent_cert_template_file}" "$${vault_agent_key_template_file}"
+}
+
+write_vault_agent_systemd_unit() {
+  log_info "Writing Vault Agent systemd unit"
+
+  cat >/etc/systemd/system/vault-agent.service <<'EOF'
+${config_vault_agent_service}
+EOF
 }
 
 # ---------------------------------------------------------------------------
@@ -915,6 +968,9 @@ main() {
   configure_vault_directories
   install_vault
   write_vault_systemd_unit
+  write_vault_agent_config
+  write_vault_agent_templates
+  write_vault_agent_systemd_unit
 
   write_secrets
   write_vault_config "$${private_ip}" "$${instance_id}" "$${availability_zone}"
