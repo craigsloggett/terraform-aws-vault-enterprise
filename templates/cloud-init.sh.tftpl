@@ -41,31 +41,33 @@ set -ef
 
 # Vault
 vault_version="${vault_version}"
-vault_data_dir="/var/opt/vault/data"
+vault_home_dir="/opt/vault"
+vault_data_dir="/var/opt/vault"
 vault_config_dir="/etc/vault.d"
-vault_license_path="/opt/vault/vault.hclic"
-vault_tls_dir="/opt/vault/tls"
+vault_license_path="$${vault_home_dir}/vault.hclic"
+vault_tls_dir="$${vault_home_dir}/tls"
+vault_raft_dir="$${vault_data_dir}/data"
 
 # An EBS data volume backs Raft state.
 # ebs_data_device_name is the attachment name from Terraform (e.g. /dev/xvdf).
 # On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
 ebs_data_device_name="${ebs_device_name}"
-ebs_data_mount="/var/opt/vault/data"
+ebs_data_mount="$${vault_raft_dir}"
 
 # An EBS audit volume provides IO isolation for audit logs.
 # ebs_audit_device_name is the attachment name from Terraform (e.g. /dev/xvdg).
 # On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
 ebs_audit_device_name="${ebs_audit_device_name}"
 ebs_audit_mount="/var/log/vault"
-vault_audit_log_file="/var/log/vault/vault-audit.log"
+vault_audit_log_file="$${ebs_audit_mount}/vault-audit.log"
 
 # TLS
-tls_ca_file="/opt/vault/tls/ca.crt"
-tls_cert_file="/opt/vault/tls/server.crt"
-tls_key_file="/opt/vault/tls/server.key"
+tls_ca_file="$${vault_tls_dir}/ca.crt"
+tls_cert_file="$${vault_tls_dir}/server.crt"
+tls_key_file="$${vault_tls_dir}/server.key"
 
 # Snapshot Agent
-snapshot_config_file="/etc/vault.d/snapshot.json"
+snapshot_config_file="$${vault_config_dir}/snapshot.json"
 
 # AWS
 aws_region="${region}"
@@ -332,21 +334,21 @@ create_vault_user() {
 configure_vault_directories() {
   log_info "Configuring Vault directory tree"
 
-  mkdir -p /opt/vault
-  chown vault:vault /opt/vault
-  chmod 755 /opt/vault
+  mkdir -p "$${vault_home_dir}"
+  chown vault:vault "$${vault_home_dir}"
+  chmod 755 "$${vault_home_dir}"
 
   mkdir -p "$${vault_tls_dir}"
   chown vault:vault "$${vault_tls_dir}"
   chmod 750 "$${vault_tls_dir}"
 
-  mkdir -p /var/opt/vault
-  chown vault:vault /var/opt/vault
-  chmod 755 /var/opt/vault
-
   mkdir -p "$${vault_data_dir}"
   chown vault:vault "$${vault_data_dir}"
-  chmod 700 "$${vault_data_dir}"
+  chmod 755 "$${vault_data_dir}"
+
+  mkdir -p "$${vault_raft_dir}"
+  chown vault:vault "$${vault_raft_dir}"
+  chmod 700 "$${vault_raft_dir}"
 
   mkdir -p "$${vault_config_dir}"
   chown root:vault "$${vault_config_dir}"
