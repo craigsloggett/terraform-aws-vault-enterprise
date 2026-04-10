@@ -24,8 +24,6 @@ resource "aws_iam_instance_profile" "vault" {
   tags = merge(var.common_tags, { Name = "${var.project_name}-vault" })
 }
 
-# KMS (auto-unseal)
-
 data "aws_iam_policy_document" "vault_kms" {
   statement {
     effect = "Allow"
@@ -43,8 +41,6 @@ resource "aws_iam_role_policy" "vault_kms" {
   role        = aws_iam_role.vault.id
   policy      = data.aws_iam_policy_document.vault_kms.json
 }
-
-# Secrets Manager (certs, license)
 
 data "aws_iam_policy_document" "vault_secrets_manager" {
   statement {
@@ -64,8 +60,6 @@ resource "aws_iam_role_policy" "vault_secrets_manager" {
   role        = aws_iam_role.vault.id
   policy      = data.aws_iam_policy_document.vault_secrets_manager.json
 }
-
-# S3 (snapshots)
 
 data "aws_iam_policy_document" "vault_s3" {
   statement {
@@ -89,8 +83,6 @@ resource "aws_iam_role_policy" "vault_s3" {
   policy      = data.aws_iam_policy_document.vault_s3.json
 }
 
-# EC2 (Raft auto-join)
-
 data "aws_iam_policy_document" "vault_ec2_describe" {
   statement {
     effect    = "Allow"
@@ -105,7 +97,63 @@ resource "aws_iam_role_policy" "vault_ec2_describe" {
   policy      = data.aws_iam_policy_document.vault_ec2_describe.json
 }
 
-# IAM (AWS auth method role ARN resolution)
+data "aws_iam_policy_document" "vault_bootstrap_root_token" {
+  statement {
+    sid    = "BootstrapRootTokenReadWrite"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:PutSecretValue",
+    ]
+    resources = [aws_secretsmanager_secret.vault_bootstrap_root_token.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "vault_bootstrap_root_token" {
+  name_prefix = "${var.project_name}-bootstrap-root-token-"
+  role        = aws_iam_role.vault.id
+  policy      = data.aws_iam_policy_document.vault_bootstrap_root_token.json
+}
+
+data "aws_iam_policy_document" "vault_recovery_keys" {
+  statement {
+    sid    = "RecoveryKeysReadWrite"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:PutSecretValue",
+    ]
+    resources = [aws_secretsmanager_secret.vault_recovery_keys.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "vault_recovery_keys" {
+  name_prefix = "${var.project_name}-recovery-keys-"
+  role        = aws_iam_role.vault.id
+  policy      = data.aws_iam_policy_document.vault_recovery_keys.json
+}
+
+data "aws_iam_policy_document" "vault_ssm" {
+  statement {
+    sid    = "ClusterStateReadWrite"
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter",
+      "ssm:PutParameter",
+    ]
+    resources = [
+      aws_ssm_parameter.vault_cluster_state.arn,
+      aws_ssm_parameter.vault_pki_state.arn,
+      aws_ssm_parameter.vault_pki_ca_cert.arn,
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "vault_ssm" {
+  name_prefix = "${var.project_name}-ssm-"
+  role        = aws_iam_role.vault.id
+  policy      = data.aws_iam_policy_document.vault_ssm.json
+}
 
 data "aws_iam_policy_document" "vault_iam_read" {
   statement {

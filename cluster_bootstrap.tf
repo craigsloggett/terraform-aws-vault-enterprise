@@ -1,10 +1,4 @@
-# Bootstrap TLS for the Vault listener.
-#
-# This file generates the self-signed CA and server cert that Vault uses
-# during initial bootstrap, before the Vault PKI secrets engine is mounted.
-# Once PKI is set up, the Vault listener cert is rotated to one issued by
-# Vault itself via Vault Agent, and this file's resources become the
-# trust anchor only, the CA stays, the server cert becomes irrelevant.
+# Resources used only during the initial Vault cluster bootstrap process.
 
 # CA
 
@@ -30,7 +24,7 @@ resource "tls_self_signed_cert" "bootstrap_ca" {
   ]
 }
 
-# Server
+# Private Key
 
 resource "tls_private_key" "bootstrap_server" {
   algorithm   = "ECDSA"
@@ -123,4 +117,41 @@ data "aws_iam_policy_document" "vault_bootstrap_server_key" {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [aws_secretsmanager_secret.vault_bootstrap_server_key.arn]
   }
+}
+
+# Root Token
+
+resource "aws_secretsmanager_secret" "vault_bootstrap_root_token" {
+  name_prefix = "${var.project_name}-vault-bootstrap-root-token-"
+  description = "Bootstrap root token for Vault (revoked after initialization)"
+
+  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-bootstrap-root-token" })
+}
+
+# Initialization Coordination SSM Parameters
+
+resource "aws_ssm_parameter" "vault_cluster_state" {
+  name        = "/${var.project_name}/vault/cluster/state"
+  type        = "String"
+  value       = "uninitialized"
+  description = "Vault cluster initialization state flag (uninitialized | ready)"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+
+  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-cluster-state" })
+}
+
+resource "aws_ssm_parameter" "vault_pki_state" {
+  name        = "/${var.project_name}/vault/pki/state"
+  type        = "String"
+  value       = "uninitialized"
+  description = "Vault PKI bootstrap state flag (uninitialized | ready)"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+
+  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-pki-state" })
 }
