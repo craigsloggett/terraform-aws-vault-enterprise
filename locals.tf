@@ -11,7 +11,7 @@ locals {
   )
   cluster_tag_key       = "vault-cluster"
   cluster_tag_value     = var.project_name
-  ebs_device_name       = "/dev/xvdf" # AWS convention for the first additional EBS volume
+  ebs_raft_device_name  = "/dev/xvdf" # AWS convention for the first additional EBS volume
   ebs_audit_device_name = "/dev/xvdg"
 
   config_vault_service          = file("${path.module}/files/vault.service")

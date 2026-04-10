@@ -33,8 +33,8 @@ output "ec2_ami_name" {
   value       = var.ec2_ami.name
 }
 
-output "vault_ca_cert" {
-  description = "CA certificate for trusting the Vault TLS chain."
-  value       = tls_self_signed_cert.ca.cert_pem
+output "vault_bootstrap_ca_cert" {
+  description = "Bootstrap TLS CA certificate for trusting the Vault TLS chain."
+  value       = tls_self_signed_cert.bootstrap_ca.cert_pem
   sensitive   = true
 }

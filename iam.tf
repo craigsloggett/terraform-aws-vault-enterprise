@@ -52,9 +52,9 @@ data "aws_iam_policy_document" "vault_secrets_manager" {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       aws_secretsmanager_secret.vault_license.arn,
-      aws_secretsmanager_secret.vault_ca_cert.arn,
-      aws_secretsmanager_secret.vault_server_cert.arn,
-      aws_secretsmanager_secret.vault_server_key.arn,
+      aws_secretsmanager_secret.vault_bootstrap_ca_cert.arn,
+      aws_secretsmanager_secret.vault_bootstrap_server_cert.arn,
+      aws_secretsmanager_secret.vault_bootstrap_server_key.arn,
     ]
   }
 }

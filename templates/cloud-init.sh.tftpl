@@ -37,19 +37,19 @@ vault_tls_cert_file="$${vault_tls_dir}/server.crt"
 vault_tls_key_file="$${vault_tls_dir}/server.key"
 
 # EBS Volume Paths
-ebs_data_device_name="${ebs_device_name}"
-ebs_data_mount="$${vault_raft_dir}"
+ebs_raft_device_name="${ebs_raft_device_name}"
+ebs_raft_mount="$${vault_raft_dir}"
 ebs_audit_device_name="${ebs_audit_device_name}"
 ebs_audit_mount="$${vault_log_dir}"
 
 # AWS
-aws_region="${region}"
+region="${region}"
 
 # AWS Secrets Manager (ARNs)
-secret_vault_license="${vault_license_secret_arn}"
-secret_vault_ca_cert="${vault_ca_cert_secret_arn}"
-secret_vault_server_cert="${vault_server_cert_secret_arn}"
-secret_vault_server_key="${vault_server_key_secret_arn}"
+vault_license_secret_arn="${vault_license_secret_arn}"
+bootstrap_tls_ca_cert_secret_arn="${bootstrap_tls_ca_cert_secret_arn}"
+bootstrap_tls_server_cert_secret_arn="${bootstrap_tls_server_cert_secret_arn}"
+bootstrap_tls_server_key_secret_arn="${bootstrap_tls_server_key_secret_arn}"
 
 # Cluster initialization coordination
 cluster_tag_key="${cluster_tag_key}"
@@ -59,8 +59,8 @@ ssm_pki_state_name="${ssm_pki_state_name}"
 ssm_pki_ca_cert_name="${ssm_pki_ca_cert_name}"
 vault_fqdn="${vault_fqdn}"
 vault_iam_role_arn="${vault_iam_role_arn}"
-secret_vault_root_token="${vault_root_token_secret_arn}"
-secret_vault_recovery_keys="${vault_recovery_keys_secret_arn}"
+vault_root_token_secret_arn="${vault_root_token_secret_arn}"
+vault_recovery_keys_secret_arn="${vault_recovery_keys_secret_arn}"
 
 # EC2 metadata service (IMDSv2)
 imds_endpoint="http://169.254.169.254"
@@ -126,7 +126,7 @@ fetch_secret() {
 
   while true; do
     if result=$(aws secretsmanager get-secret-value \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --secret-id "$${secret_arn}" \
       --query SecretString --output text 2>/dev/null); then
       printf '%s' "$${result}"
@@ -401,10 +401,10 @@ EOF
 write_secrets() {
   log_info "Fetching secrets from AWS Secrets Manager"
 
-  vault_license="$(fetch_secret "$${secret_vault_license}")"
-  ca_cert="$(fetch_secret "$${secret_vault_ca_cert}")"
-  server_cert="$(fetch_secret "$${secret_vault_server_cert}")"
-  server_key="$(fetch_secret "$${secret_vault_server_key}")"
+  vault_license="$(fetch_secret "$${vault_license_secret_arn}")"
+  ca_cert="$(fetch_secret "$${bootstrap_tls_ca_cert_secret_arn}")"
+  server_cert="$(fetch_secret "$${bootstrap_tls_server_cert_secret_arn}")"
+  server_key="$(fetch_secret "$${bootstrap_tls_server_key_secret_arn}")"
 
   # Write the license file
   log_info "Writing the Vault license"
@@ -498,7 +498,7 @@ is_bootstrap_node() {
 
   # Fetch all running instance IDs in this cluster by tag.
   all_ids="$(aws ec2 describe-instances \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --filters \
     "Name=tag:$${cluster_tag_key},Values=$${cluster_tag_value}" \
     "Name=instance-state-name,Values=running" \
@@ -548,19 +548,19 @@ init_cluster() {
 
   log_info "Storing root token in Secrets Manager"
   aws secretsmanager put-secret-value \
-    --region "$${aws_region}" \
-    --secret-id "$${secret_vault_root_token}" \
+    --region "$${region}" \
+    --secret-id "$${vault_root_token_secret_arn}" \
     --secret-string "$${root_token}"
 
   log_info "Storing recovery keys in Secrets Manager"
   aws secretsmanager put-secret-value \
-    --region "$${aws_region}" \
-    --secret-id "$${secret_vault_recovery_keys}" \
+    --region "$${region}" \
+    --secret-id "$${vault_recovery_keys_secret_arn}" \
     --secret-string "$${recovery_keys}"
 
   log_info "Writing cluster state: ready"
   aws ssm put-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_cluster_state_name}" \
     --value "ready" \
     --overwrite
@@ -580,7 +580,7 @@ join_cluster() {
 
   while true; do
     state="$(aws ssm get-parameter \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --name "$${ssm_cluster_state_name}" \
       --query "Parameter.Value" \
       --output text 2>/dev/null)" || true
@@ -608,7 +608,7 @@ join_cluster() {
 authenticate_vault() {
   log_info "Authenticating with Vault using root token"
 
-  root_token="$(fetch_secret "$${secret_vault_root_token}")"
+  root_token="$(fetch_secret "$${vault_root_token_secret_arn}")"
 
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TOKEN="$${root_token}"
@@ -696,7 +696,7 @@ configure_pki_engine() {
   log_info "Publishing PKI CA cert to SSM"
   ca_cert_pem="$(vault read -field=certificate pki/cert/ca)"
   aws ssm put-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_pki_ca_cert_name}" \
     --value "$${ca_cert_pem}" \
     --overwrite
@@ -742,7 +742,7 @@ EOF
 
   log_info "Writing PKI state: ready"
   aws ssm put-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_pki_state_name}" \
     --value "ready" \
     --overwrite
@@ -762,7 +762,7 @@ wait_for_pki_ready() {
 
   while true; do
     state="$(aws ssm get-parameter \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --name "$${ssm_pki_state_name}" \
       --query "Parameter.Value" \
       --output text 2>/dev/null)" || true
@@ -792,7 +792,7 @@ issue_node_cert() {
   if [ -z "$${VAULT_TOKEN:-}" ]; then
     log_info "Fetching new PKI CA cert from SSM"
     new_ca_cert="$(aws ssm get-parameter \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --name "$${ssm_pki_ca_cert_name}" \
       --query "Parameter.Value" \
       --output text)"
@@ -856,7 +856,7 @@ cleanup_bootstrap_tls() {
   # Fetch the PKI CA cert from SSM. This was written by configure_pki_engine()
   # on the bootstrap node and is available to all nodes without a Vault token.
   pki_ca_cert="$(aws ssm get-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_pki_ca_cert_name}" \
     --query "Parameter.Value" \
     --output text)"
@@ -895,7 +895,7 @@ main() {
   prepare_system
   configure_time
   create_vault_user
-  prepare_disk "$${ebs_data_device_name}" "$${ebs_data_mount}" "vault-data"
+  prepare_disk "$${ebs_raft_device_name}" "$${ebs_raft_mount}" "vault-data"
   prepare_disk "$${ebs_audit_device_name}" "$${ebs_audit_mount}" "vault-audit"
   configure_vault_directories
   install_vault

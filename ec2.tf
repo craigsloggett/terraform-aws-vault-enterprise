@@ -42,14 +42,14 @@ resource "aws_launch_template" "vault" {
   }
 
   user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
-    vault_version                = var.vault_version
-    region                       = data.aws_region.current.region
-    ebs_device_name              = local.ebs_device_name
-    ebs_audit_device_name        = local.ebs_audit_device_name
-    vault_license_secret_arn     = aws_secretsmanager_secret.vault_license.arn
-    vault_ca_cert_secret_arn     = aws_secretsmanager_secret.vault_ca_cert.arn
-    vault_server_cert_secret_arn = aws_secretsmanager_secret.vault_server_cert.arn
-    vault_server_key_secret_arn  = aws_secretsmanager_secret.vault_server_key.arn
+    vault_version                        = var.vault_version
+    region                               = data.aws_region.current.region
+    ebs_raft_device_name                 = local.ebs_raft_device_name
+    ebs_audit_device_name                = local.ebs_audit_device_name
+    vault_license_secret_arn             = aws_secretsmanager_secret.vault_license.arn
+    bootstrap_tls_ca_cert_secret_arn     = aws_secretsmanager_secret.vault_bootstrap_ca_cert.arn
+    bootstrap_tls_server_cert_secret_arn = aws_secretsmanager_secret.vault_bootstrap_server_cert.arn
+    bootstrap_tls_server_key_secret_arn  = aws_secretsmanager_secret.vault_bootstrap_server_key.arn
 
     cluster_tag_key                = local.cluster_tag_key
     cluster_tag_value              = local.cluster_tag_value
