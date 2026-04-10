@@ -169,6 +169,18 @@ variable "vault_subdomain" {
   default     = "vault"
 }
 
+variable "vault_pki_organization" {
+  type        = string
+  description = "Organization name for the PKI root CA."
+  default     = "HashiCorp"
+}
+
+variable "vault_pki_country" {
+  type        = string
+  description = "Country code for the PKI root CA."
+  default     = "US"
+}
+
 variable "vault_version" {
   type        = string
   description = "Vault Enterprise release version (e.g., 1.21.4+ent)."

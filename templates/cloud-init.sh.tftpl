@@ -1,5 +1,5 @@
 #!/bin/sh
-# setup-vault-server.sh (Bootstrap a Vault Enterprise server node on EC2).
+# setup-vault-server.sh
 #
 # This script is rendered by Terraform using templatefile() and placed in
 # EC2 instance user data.
@@ -7,74 +7,52 @@
 # Assumes:
 #   - Ubuntu or Debian
 #   - IAM instance profile with permissions for Secrets Manager and KMS
-#   - Secrets stored in AWS Secrets Manager
-#   - An EBS data volume attached for Raft storage
+#   - EBS data volumes attached for the root filesystem, Raft storage,
+#     and Vault audit logs.
 
 # shellcheck disable=SC1083,SC2034,SC2086,SC2154,SC2157,SC2170,SC2193,SC2195,SC2269,SC2288
-# SC1083/SC2288:
-# Terraform's $${var} escape sequence is read by shellcheck as a literal
-# `$${...}` in command position, the sequence is replaced with `$${var}`
-# at render time and is a normal shell parameter expansion at runtime.
-# SC2034/SC2154:
-# Variables are set via Terraform templatefile() interpolation and referenced
-# with escaped dollar signs, shellcheck cannot parse either.
-# SC2086:
-# vault_version is a Terraform-templated version string with no whitespace
-# or globs, quoting is unnecessary.
-# SC2170:
-# $${var} comparisons resolve to valid integers at runtime.
-# SC2193:
-# curl -w '%%{http_code}' returns runtime HTTP status codes; shellcheck
-# reads the literal format string and cannot see the comparison is valid.
-# SC2195:
-# case "$${machine}" patterns are valid at runtime, shellcheck sees the
-# Terraform escape as a literal and incorrectly flags the case arms.
-# SC2269:
-# vault_version="${vault_version}" is not self-assignment, the RHS is a
-# Terraform interpolation replaced at plan time.
 
 set -ef
 
 # ---------------------------------------------------------------------------
-# Configuration (values templated by Terraform at deploy time)
+# Input Parameters
 # ---------------------------------------------------------------------------
 
-# Vault
+# Vault Directories
 vault_version="${vault_version}"
-vault_data_dir="/opt/vault/data"
+vault_home_dir="/opt/vault"
+vault_data_dir="/var/opt/vault"
 vault_config_dir="/etc/vault.d"
-vault_license_path="/opt/vault/vault.hclic"
+vault_log_dir="/var/log/vault"
+vault_tls_dir="$${vault_home_dir}/tls"
+vault_raft_dir="$${vault_data_dir}/data"
 
-# An EBS data volume backs Raft state.
-# ebs_data_device_name is the attachment name from Terraform (e.g. /dev/xvdf).
-# On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
-ebs_data_device_name="${ebs_device_name}"
-ebs_data_mount="/opt/vault/data"
+# Vault File Paths
+vault_license_file="$${vault_home_dir}/vault.hclic"
+vault_config_file="$${vault_config_dir}/vault.hcl"
+vault_snapshot_config_file="$${vault_config_dir}/snapshot.json"
+vault_audit_log_file="$${vault_log_dir}/vault_audit.log"
+vault_tls_ca_file="$${vault_tls_dir}/ca.crt"
+vault_tls_cert_file="$${vault_tls_dir}/server.crt"
+vault_tls_key_file="$${vault_tls_dir}/server.key"
 
-# An EBS audit volume provides IO isolation for audit logs.
-# ebs_audit_device_name is the attachment name from Terraform (e.g. /dev/xvdg).
-# On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
+# EBS Volume Paths
+ebs_raft_device_name="${ebs_raft_device_name}"
+ebs_raft_mount="$${vault_raft_dir}"
 ebs_audit_device_name="${ebs_audit_device_name}"
-ebs_audit_mount="/var/log/vault"
-
-# TLS
-tls_ca_file="/opt/vault/tls/ca.crt"
-tls_cert_file="/opt/vault/tls/server.crt"
-tls_key_file="/opt/vault/tls/server.key"
-
-# Snapshot Agent
-snapshot_config_file="/etc/vault.d/snapshot.json"
+ebs_audit_mount="$${vault_log_dir}"
 
 # AWS
-aws_region="${region}"
+region="${region}"
 
 # AWS Secrets Manager (ARNs)
-secret_vault_license="${vault_license_secret_arn}"
-secret_vault_ca_cert="${vault_ca_cert_secret_arn}"
-secret_vault_server_cert="${vault_server_cert_secret_arn}"
-secret_vault_server_key="${vault_server_key_secret_arn}"
+vault_license_secret_arn="${vault_license_secret_arn}"
+bootstrap_tls_ca_cert_secret_arn="${bootstrap_tls_ca_cert_secret_arn}"
+bootstrap_tls_server_cert_secret_arn="${bootstrap_tls_server_cert_secret_arn}"
+bootstrap_tls_server_key_secret_arn="${bootstrap_tls_server_key_secret_arn}"
 
 # Cluster initialization coordination
+cluster_name="${cluster_name}"
 cluster_tag_key="${cluster_tag_key}"
 cluster_tag_value="${cluster_tag_value}"
 ssm_cluster_state_name="${ssm_cluster_state_name}"
@@ -82,8 +60,10 @@ ssm_pki_state_name="${ssm_pki_state_name}"
 ssm_pki_ca_cert_name="${ssm_pki_ca_cert_name}"
 vault_fqdn="${vault_fqdn}"
 vault_iam_role_arn="${vault_iam_role_arn}"
-secret_vault_root_token="${vault_root_token_secret_arn}"
-secret_vault_recovery_keys="${vault_recovery_keys_secret_arn}"
+vault_bootstrap_root_token_secret_arn="${vault_bootstrap_root_token_secret_arn}"
+vault_recovery_keys_secret_arn="${vault_recovery_keys_secret_arn}"
+vault_pki_organization="${vault_pki_organization}"
+vault_pki_country="${vault_pki_country}"
 
 # EC2 metadata service (IMDSv2)
 imds_endpoint="http://169.254.169.254"
@@ -106,7 +86,7 @@ log_error() {
 }
 
 # ---------------------------------------------------------------------------
-# EC2 metadata helpers (IMDSv2)
+# EC2 Metadata Helpers (IMDSv2)
 # ---------------------------------------------------------------------------
 
 imds_token() {
@@ -138,13 +118,9 @@ get_availability_zone() {
 }
 
 # ---------------------------------------------------------------------------
-# AWS Secrets Manager helper
+# AWS Secrets Manager Helper
 # ---------------------------------------------------------------------------
 
-# Vault's variant retries, early-boot Secrets Manager calls have been
-# observed to fail intermittently before the instance profile is fully
-# usable. Consul/Nomad's fetch_secret has no retry; this divergence is
-# intentional.
 fetch_secret() {
   secret_arn="$${1}"
 
@@ -153,7 +129,7 @@ fetch_secret() {
 
   while true; do
     if result=$(aws secretsmanager get-secret-value \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --secret-id "$${secret_arn}" \
       --query SecretString --output text 2>/dev/null); then
       printf '%s' "$${result}"
@@ -169,7 +145,7 @@ fetch_secret() {
 }
 
 # ---------------------------------------------------------------------------
-# Wait for the network to be available before starting
+# Pre-checks
 # ---------------------------------------------------------------------------
 
 wait_for_network() {
@@ -196,7 +172,7 @@ wait_for_network() {
 }
 
 # ---------------------------------------------------------------------------
-# System preparation
+# System Configuration
 # ---------------------------------------------------------------------------
 
 prepare_system() {
@@ -208,10 +184,6 @@ prepare_system() {
   apt-get -yq install \
     awscli jq unzip nvme-cli amazon-ec2-utils chrony >/dev/null
 }
-
-# ---------------------------------------------------------------------------
-# Time synchronization (required before any AWS Secrets Manager calls)
-# ---------------------------------------------------------------------------
 
 configure_time() {
   log_info "Configuring system time"
@@ -225,7 +197,7 @@ configure_time() {
 }
 
 # ---------------------------------------------------------------------------
-# EBS volumes (discover, format, and mount)
+# EBS Volume Helpers
 # ---------------------------------------------------------------------------
 
 resolve_ebs_nvme_device() {
@@ -310,37 +282,46 @@ prepare_disk() {
 }
 
 # ---------------------------------------------------------------------------
-# Create the vault system user and group
+# Vault Enterprise System Configuration
 # ---------------------------------------------------------------------------
 
 create_vault_user() {
   log_info "Creating vault system user"
 
   groupadd --system vault
-  useradd --system -g vault -d /etc/vault.d -s /bin/false vault
+  useradd --system -g vault -d "$${vault_home_dir}" -s /bin/false vault
+}
+
+configure_vault_directories() {
+  log_info "Configuring Vault directory tree"
+
+  mkdir -p "$${vault_home_dir}"
+  chown vault:vault "$${vault_home_dir}"
+  chmod 755 "$${vault_home_dir}"
+
+  mkdir -p "$${vault_data_dir}"
+  chown vault:vault "$${vault_data_dir}"
+  chmod 755 "$${vault_data_dir}"
+
+  mkdir -p "$${vault_config_dir}"
+  chown root:vault "$${vault_config_dir}"
+  chmod 750 "$${vault_config_dir}"
+
+  mkdir -p "$${vault_log_dir}"
+  chown vault:vault "$${vault_log_dir}"
+  chmod 750 "$${vault_log_dir}"
+
+  mkdir -p "$${vault_tls_dir}"
+  chown vault:vault "$${vault_tls_dir}"
+  chmod 755 "$${vault_tls_dir}"
+
+  mkdir -p "$${vault_raft_dir}"
+  chown vault:vault "$${vault_raft_dir}"
+  chmod 700 "$${vault_raft_dir}"
 }
 
 # ---------------------------------------------------------------------------
-# Create the Vault directory tree and set ownership
-#
-# Called after EBS volumes are mounted so that ownership is applied to the
-# mount roots, not the underlying directories that are hidden by the mount.
-# ---------------------------------------------------------------------------
-
-create_directory_tree() {
-  log_info "Creating Vault directory tree"
-
-  mkdir -p /etc/vault.d/tls
-  mkdir -p /opt/vault/tls
-  mkdir -p /opt/vault/data
-  mkdir -p /var/log/vault
-
-  chown -R vault:vault /etc/vault.d /opt/vault /var/log/vault
-  chmod 750 /etc/vault.d /opt/vault /var/log/vault
-}
-
-# ---------------------------------------------------------------------------
-# Install Vault Enterprise (binary download with GPG + SHA256 verification)
+# Vault Enterprise Installation
 # ---------------------------------------------------------------------------
 
 install_vault() {
@@ -402,10 +383,6 @@ install_vault() {
   log_info "Vault Enterprise $${vault_version} installed"
 }
 
-# ---------------------------------------------------------------------------
-# Write the Vault systemd unit file and drop-in override
-# ---------------------------------------------------------------------------
-
 write_vault_systemd_unit() {
   log_info "Writing Vault systemd unit"
 
@@ -421,37 +398,33 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Fetch secrets and write sensitive material to disk
+# Vault Enterprise Bootstrap Configuration
 # ---------------------------------------------------------------------------
 
 write_secrets() {
   log_info "Fetching secrets from AWS Secrets Manager"
 
-  vault_license="$(fetch_secret "$${secret_vault_license}")"
-  ca_cert="$(fetch_secret "$${secret_vault_ca_cert}")"
-  server_cert="$(fetch_secret "$${secret_vault_server_cert}")"
-  server_key="$(fetch_secret "$${secret_vault_server_key}")"
+  vault_license="$(fetch_secret "$${vault_license_secret_arn}")"
+  ca_cert="$(fetch_secret "$${bootstrap_tls_ca_cert_secret_arn}")"
+  server_cert="$(fetch_secret "$${bootstrap_tls_server_cert_secret_arn}")"
+  server_key="$(fetch_secret "$${bootstrap_tls_server_key_secret_arn}")"
 
   # Write the license file
   log_info "Writing the Vault license"
-  printf '%s\n' "$${vault_license}" >"$${vault_license_path}"
-  chown vault:vault "$${vault_license_path}"
-  chmod 0640 "$${vault_license_path}"
+  printf '%s\n' "$${vault_license}" >"$${vault_license_file}"
+  chown vault:vault "$${vault_license_file}"
+  chmod 0640 "$${vault_license_file}"
 
   # Write TLS certificates
-  log_info "Writing TLS certificates"
-  mkdir -p "$(dirname "$${tls_ca_file}")"
-  printf '%s\n' "$${ca_cert}" >"$${tls_ca_file}"
-  printf '%s\n' "$${server_cert}" >"$${tls_cert_file}"
-  printf '%s\n' "$${server_key}" >"$${tls_key_file}"
+  log_info "Writing bootstrap TLS certificates"
+  printf '%s\n' "$${ca_cert}" >"$${vault_tls_ca_file}"
+  printf '%s\n' "$${server_cert}" >"$${vault_tls_cert_file}"
+  printf '%s\n' "$${server_key}" >"$${vault_tls_key_file}"
 
-  chown vault:vault "$${tls_ca_file}" "$${tls_cert_file}" "$${tls_key_file}"
-  chmod 0640 "$${tls_ca_file}" "$${tls_cert_file}" "$${tls_key_file}"
+  chown vault:vault "$${vault_tls_ca_file}" "$${vault_tls_cert_file}" "$${vault_tls_key_file}"
+  chmod 0640 "$${vault_tls_cert_file}" "$${vault_tls_key_file}"
+  chmod 0644 "$${vault_tls_ca_file}"
 }
-
-# ---------------------------------------------------------------------------
-# Generate Vault server configuration
-# ---------------------------------------------------------------------------
 
 write_vault_config() {
   private_ip="$${1}"
@@ -461,16 +434,16 @@ write_vault_config() {
   log_info "Writing Vault configuration (bind=$${private_ip})"
 
   # vault.hcl (contains $${private_ip} shell variable, needs unquoted heredoc).
-  cat >"$${vault_config_dir}/vault.hcl" <<EOF
+  cat >"$${vault_config_file}" <<EOF
 ${config_vault_hcl}
 EOF
 
-  chown vault:vault "$${vault_config_dir}/vault.hcl"
-  chmod 0640 "$${vault_config_dir}/vault.hcl"
+  chown vault:vault "$${vault_config_file}"
+  chmod 0640 "$${vault_config_file}"
 }
 
 # ---------------------------------------------------------------------------
-# Enable and start services
+# Vault Enterprise Service Configuration
 # ---------------------------------------------------------------------------
 
 start_services() {
@@ -485,10 +458,6 @@ start_services() {
   log_info "All services started"
 }
 
-# ---------------------------------------------------------------------------
-# Wait for the Vault API to respond on the local listener
-# ---------------------------------------------------------------------------
-
 wait_for_vault_api() {
   log_info "Waiting for Vault API to become available"
 
@@ -500,8 +469,8 @@ wait_for_vault_api() {
     # We capture the HTTP status and treat anything other than 000 (no connection)
     # as success (501 means uninitialized, 503 means sealed, 200/429 means
     # active/standby). All indicate the API is up and TLS is working.
-    # -k is intentional: the bootstrap cert is self-signed and we are connecting
-    # to 127.0.0.1, so hostname validation provides no security here.
+    # -k is intentional: the bootstrap cert is self-signed and we connect to
+    # 127.0.0.1 during bootstrap, so hostname validation is not meaningful here.
     status="$(curl -sk -o /dev/null -w '%%{http_code}' \
       "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null)" || true
 
@@ -522,7 +491,7 @@ wait_for_vault_api() {
 }
 
 # ---------------------------------------------------------------------------
-# Bootstrap node election (lowest running instance ID in the cluster wins)
+# Vault Enterprise Cluster Initialization
 # ---------------------------------------------------------------------------
 
 is_bootstrap_node() {
@@ -532,7 +501,7 @@ is_bootstrap_node() {
 
   # Fetch all running instance IDs in this cluster by tag.
   all_ids="$(aws ec2 describe-instances \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --filters \
     "Name=tag:$${cluster_tag_key},Values=$${cluster_tag_value}" \
     "Name=instance-state-name,Values=running" \
@@ -554,15 +523,11 @@ is_bootstrap_node() {
   return 1
 }
 
-# ---------------------------------------------------------------------------
-# Initialize the Vault cluster (bootstrap node only)
-# ---------------------------------------------------------------------------
-
 init_cluster() {
   log_info "Initializing Vault cluster"
 
   export VAULT_ADDR="https://127.0.0.1:8200"
-  export VAULT_CACERT="$${tls_ca_file}"
+  export VAULT_CACERT="$${vault_tls_ca_file}"
 
   # Idempotency guard: if the cluster is already initialized (e.g. this is a
   # replacement node that happens to have the lowest instance ID), skip init.
@@ -584,21 +549,21 @@ init_cluster() {
   root_token="$(printf '%s' "$${init_output}" | jq -r '.root_token')"
   recovery_keys="$(printf '%s' "$${init_output}" | jq -c '.recovery_keys_b64')"
 
-  log_info "Storing root token in Secrets Manager"
+  log_info "Storing bootstrap root token in Secrets Manager"
   aws secretsmanager put-secret-value \
-    --region "$${aws_region}" \
-    --secret-id "$${secret_vault_root_token}" \
+    --region "$${region}" \
+    --secret-id "$${vault_bootstrap_root_token_secret_arn}" \
     --secret-string "$${root_token}"
 
   log_info "Storing recovery keys in Secrets Manager"
   aws secretsmanager put-secret-value \
-    --region "$${aws_region}" \
-    --secret-id "$${secret_vault_recovery_keys}" \
+    --region "$${region}" \
+    --secret-id "$${vault_recovery_keys_secret_arn}" \
     --secret-string "$${recovery_keys}"
 
   log_info "Writing cluster state: ready"
   aws ssm put-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_cluster_state_name}" \
     --value "ready" \
     --overwrite
@@ -607,7 +572,7 @@ init_cluster() {
 }
 
 # ---------------------------------------------------------------------------
-# Wait for the cluster to be initialized (follower nodes only)
+# Vault Enterprise Raft Initialization
 # ---------------------------------------------------------------------------
 
 join_cluster() {
@@ -618,7 +583,7 @@ join_cluster() {
 
   while true; do
     state="$(aws ssm get-parameter \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --name "$${ssm_cluster_state_name}" \
       --query "Parameter.Value" \
       --output text 2>/dev/null)" || true
@@ -640,23 +605,23 @@ join_cluster() {
 }
 
 # ---------------------------------------------------------------------------
-# Authenticate with Vault using the root token (bootstrap node only)
+# Vault Enterprise Configuration
 # ---------------------------------------------------------------------------
 
 authenticate_vault() {
-  log_info "Authenticating with Vault using root token"
+  log_info "Authenticating with Vault using bootstrap root token"
 
-  root_token="$(fetch_secret "$${secret_vault_root_token}")"
+  root_token="$(fetch_secret "$${vault_bootstrap_root_token_secret_arn}")"
 
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TOKEN="$${root_token}"
-  export VAULT_CACERT="$${tls_ca_file}"
+  export VAULT_CACERT="$${vault_tls_ca_file}"
 
   log_info "Vault authentication configured"
 }
 
 # ---------------------------------------------------------------------------
-# Configure Raft Autopilot (bootstrap node only)
+# Vault Enterprise Raft Configuration
 # ---------------------------------------------------------------------------
 
 configure_autopilot() {
@@ -670,28 +635,24 @@ configure_autopilot() {
   log_info "Raft Autopilot configured"
 }
 
-# ---------------------------------------------------------------------------
-# Configure automated Raft snapshots (bootstrap node only)
-# ---------------------------------------------------------------------------
-
 configure_snapshots() {
   log_info "Configuring automated Raft snapshots"
 
-  cat >"$${snapshot_config_file}" <<'EOF'
+  cat >"$${vault_snapshot_config_file}" <<'EOF'
 ${config_snapshot_json}
 EOF
 
-  chown vault:vault "$${snapshot_config_file}"
-  chmod 0640 "$${snapshot_config_file}"
+  chown vault:vault "$${vault_snapshot_config_file}"
+  chmod 0640 "$${vault_snapshot_config_file}"
 
   vault write sys/storage/raft/snapshot-auto/config/hourly \
-    @"$${snapshot_config_file}"
+    @"$${vault_snapshot_config_file}"
 
   log_info "Automated Raft snapshots configured"
 }
 
 # ---------------------------------------------------------------------------
-# Configure the Vault PKI secrets engine (bootstrap node only)
+# Vault Enterprise PKI Secrets Engine Configuration
 # ---------------------------------------------------------------------------
 
 configure_pki_engine() {
@@ -707,7 +668,9 @@ configure_pki_engine() {
   # Generate root CA with ECDSA P-384 keys, consistent with the bootstrap
   # CA and server certs in tls.tf.
   vault write -format=json pki/root/generate/internal \
-    common_name="${cluster_tag_value} CA" \
+    common_name="$${cluster_name} Vault Root CA" \
+    organization="$${vault_pki_organization}" \
+    country="$${vault_pki_country}" \
     ttl=87600h \
     key_type=ec \
     key_bits=384 |
@@ -725,6 +688,8 @@ configure_pki_engine() {
     allowed_domains="$${vault_fqdn}" \
     allow_bare_domains=true \
     allow_subdomains=false \
+    allow_localhost=false \
+    allow_ip_sans=false \
     max_ttl=720h \
     key_type=ec \
     key_bits=384 \
@@ -736,7 +701,7 @@ configure_pki_engine() {
   log_info "Publishing PKI CA cert to SSM"
   ca_cert_pem="$(vault read -field=certificate pki/cert/ca)"
   aws ssm put-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_pki_ca_cert_name}" \
     --value "$${ca_cert_pem}" \
     --overwrite
@@ -745,7 +710,7 @@ configure_pki_engine() {
 }
 
 # ---------------------------------------------------------------------------
-# Configure the Vault AWS auth method (bootstrap node only)
+# Vault Enterprise AWS Auth Method Configuration
 # ---------------------------------------------------------------------------
 
 configure_aws_auth() {
@@ -777,12 +742,12 @@ EOF
   # (see prepare_disk in main) to isolate audit log IO and growth from the
   # root filesystem.
   if ! vault audit list -format=json | jq -e '."file/"' >/dev/null 2>&1; then
-    vault audit enable file file_path=/var/log/vault/vault-audit.log
+    vault audit enable file file_path="$${vault_audit_log_file}"
   fi
 
   log_info "Writing PKI state: ready"
   aws ssm put-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_pki_state_name}" \
     --value "ready" \
     --overwrite
@@ -791,7 +756,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Wait for PKI bootstrap to complete (follower nodes only)
+# Vault Enterprise Self-issued Certificate Configuration
 # ---------------------------------------------------------------------------
 
 wait_for_pki_ready() {
@@ -802,7 +767,7 @@ wait_for_pki_ready() {
 
   while true; do
     state="$(aws ssm get-parameter \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --name "$${ssm_pki_state_name}" \
       --query "Parameter.Value" \
       --output text 2>/dev/null)" || true
@@ -823,10 +788,6 @@ wait_for_pki_ready() {
   done
 }
 
-# ---------------------------------------------------------------------------
-# Issue a PKI-signed TLS certificate for this node
-# ---------------------------------------------------------------------------
-
 issue_node_cert() {
   log_info "Issuing PKI-signed TLS certificate for this node"
 
@@ -836,7 +797,7 @@ issue_node_cert() {
   if [ -z "$${VAULT_TOKEN:-}" ]; then
     log_info "Fetching new PKI CA cert from SSM"
     new_ca_cert="$(aws ssm get-parameter \
-      --region "$${aws_region}" \
+      --region "$${region}" \
       --name "$${ssm_pki_ca_cert_name}" \
       --query "Parameter.Value" \
       --output text)"
@@ -846,13 +807,13 @@ issue_node_cert() {
     # used for Vault API calls here, this node's listener is still
     # presenting the bootstrap cert until the SIGHUP, so VAULT_CACERT
     # must continue to point at the bootstrap CA.
-    new_ca_cert_file="/opt/vault/tls/pki-ca.crt"
+    new_ca_cert_file="$${vault_tls_dir}/pki-ca.crt"
     printf '%s\n' "$${new_ca_cert}" >"$${new_ca_cert_file}"
     chown vault:vault "$${new_ca_cert_file}"
-    chmod 0640 "$${new_ca_cert_file}"
+    chmod 0644 "$${new_ca_cert_file}"
 
     export VAULT_ADDR="https://127.0.0.1:8200"
-    export VAULT_CACERT="$${tls_ca_file}"
+    export VAULT_CACERT="$${vault_tls_ca_file}"
 
     log_info "Authenticating via AWS IAM auth method"
     vault_token="$(vault login \
@@ -868,8 +829,8 @@ issue_node_cert() {
     common_name="$${vault_fqdn}" \
     ttl=720h)"
 
-  tmp_cert="/opt/vault/tls/server.crt.tmp"
-  tmp_key="/opt/vault/tls/server.key.tmp"
+  tmp_cert="$${vault_tls_dir}/server.crt.tmp"
+  tmp_key="$${vault_tls_dir}/server.key.tmp"
 
   printf '%s\n' "$(printf '%s' "$${cert_json}" | jq -r '.data.certificate')" \
     >"$${tmp_cert}"
@@ -880,15 +841,11 @@ issue_node_cert() {
   chmod 0640 "$${tmp_cert}" "$${tmp_key}"
 
   # Atomic move to final paths (vault.hcl already references these).
-  mv "$${tmp_cert}" "$${tls_cert_file}"
-  mv "$${tmp_key}" "$${tls_key_file}"
+  mv "$${tmp_cert}" "$${vault_tls_cert_file}"
+  mv "$${tmp_key}" "$${vault_tls_key_file}"
 
-  log_info "PKI-signed certificate written to $${tls_cert_file}"
+  log_info "PKI-signed certificate written to $${vault_tls_cert_file}"
 }
-
-# ---------------------------------------------------------------------------
-# Reload the Vault TLS listener with the newly issued certificate
-# ---------------------------------------------------------------------------
 
 replace_node_tls() {
   log_info "Reloading Vault TLS listener with PKI-signed certificate"
@@ -898,37 +855,43 @@ replace_node_tls() {
   log_info "Vault TLS listener reloaded"
 }
 
-# ---------------------------------------------------------------------------
-# Replace bootstrap CA cert on disk with the PKI CA cert
-# ---------------------------------------------------------------------------
-
 cleanup_bootstrap_tls() {
   log_info "Replacing bootstrap CA cert with PKI CA cert on disk"
 
   # Fetch the PKI CA cert from SSM. This was written by configure_pki_engine()
   # on the bootstrap node and is available to all nodes without a Vault token.
   pki_ca_cert="$(aws ssm get-parameter \
-    --region "$${aws_region}" \
+    --region "$${region}" \
     --name "$${ssm_pki_ca_cert_name}" \
     --query "Parameter.Value" \
     --output text)"
 
-  # Overwrite the bootstrap CA cert at tls_ca_file. vault.hcl references this
+  # Overwrite the bootstrap CA cert at vault_tls_ca_file. vault.hcl references this
   # path for leader_ca_cert_file in the retry_join block, it must now trust
   # the PKI CA, not the bootstrap CA.
-  printf '%s\n' "$${pki_ca_cert}" >"$${tls_ca_file}"
-  chown vault:vault "$${tls_ca_file}"
-  chmod 0640 "$${tls_ca_file}"
+  printf '%s\n' "$${pki_ca_cert}" >"$${vault_tls_ca_file}"
+  chown vault:vault "$${vault_tls_ca_file}"
+  chmod 0644 "$${vault_tls_ca_file}"
 
-  log_info "Bootstrap CA cert replaced with PKI CA cert at $${tls_ca_file}"
+  log_info "Bootstrap CA cert replaced with PKI CA cert at $${vault_tls_ca_file}"
 
   # Remove the temporary PKI CA cert file written by the follower path in
   # issue_node_cert(), if present.
-  pki_ca_tmp="/opt/vault/tls/pki-ca.crt"
+  pki_ca_tmp="$${vault_tls_dir}/pki-ca.crt"
   if [ -f "$${pki_ca_tmp}" ]; then
     rm -f "$${pki_ca_tmp}"
     log_info "Removed temporary PKI CA cert file $${pki_ca_tmp}"
   fi
+}
+
+write_vault_cli_config() {
+  log_info "Writing Vault CLI environment to /etc/profile.d/99-vault-cli-config.sh"
+
+  cat >/etc/profile.d/99-vault-cli-config.sh <<PROFILE
+export VAULT_ADDR="https://127.0.0.1:8200"
+export VAULT_TLS_SERVER_NAME="$${vault_fqdn}"
+export VAULT_CACERT="$${vault_tls_ca_file}"
+PROFILE
 }
 
 # ---------------------------------------------------------------------------
@@ -947,9 +910,9 @@ main() {
   prepare_system
   configure_time
   create_vault_user
-  prepare_disk "$${ebs_data_device_name}" "$${ebs_data_mount}" "vault-data"
+  prepare_disk "$${ebs_raft_device_name}" "$${ebs_raft_mount}" "vault-data"
   prepare_disk "$${ebs_audit_device_name}" "$${ebs_audit_mount}" "vault-audit"
-  create_directory_tree
+  configure_vault_directories
   install_vault
   write_vault_systemd_unit
 
@@ -975,6 +938,7 @@ main() {
 
   replace_node_tls
   cleanup_bootstrap_tls
+  write_vault_cli_config
 
   log_info "=== Bootstrap complete ==="
 }
