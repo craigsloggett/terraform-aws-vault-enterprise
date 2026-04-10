@@ -61,6 +61,8 @@ resource "aws_launch_template" "vault" {
     vault_bootstrap_root_token_secret_arn = aws_secretsmanager_secret.vault_bootstrap_root_token.arn
     vault_recovery_keys_secret_arn        = aws_secretsmanager_secret.vault_recovery_keys.arn
     vault_minimum_quorum_size             = var.vault_node_count
+    vault_pki_organization                = var.vault_pki_organization
+    vault_pki_country                     = var.vault_pki_country
 
     config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
       cluster_name      = var.project_name

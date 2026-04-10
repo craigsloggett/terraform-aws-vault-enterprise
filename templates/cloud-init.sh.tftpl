@@ -61,6 +61,8 @@ vault_fqdn="${vault_fqdn}"
 vault_iam_role_arn="${vault_iam_role_arn}"
 vault_bootstrap_root_token_secret_arn="${vault_bootstrap_root_token_secret_arn}"
 vault_recovery_keys_secret_arn="${vault_recovery_keys_secret_arn}"
+vault_pki_organization="${vault_pki_organization}"
+vault_pki_country="${vault_pki_country}"
 
 # EC2 metadata service (IMDSv2)
 imds_endpoint="http://169.254.169.254"
@@ -665,7 +667,9 @@ configure_pki_engine() {
   # Generate root CA with ECDSA P-384 keys, consistent with the bootstrap
   # CA and server certs in tls.tf.
   vault write -format=json pki/root/generate/internal \
-    common_name="${cluster_tag_value} CA" \
+    common_name="${cluster_tag_value} Vault Root CA" \
+    organization="$${vault_pki_organization}" \
+    country="$${vault_pki_country}" \
     ttl=87600h \
     key_type=ec \
     key_bits=384 |
