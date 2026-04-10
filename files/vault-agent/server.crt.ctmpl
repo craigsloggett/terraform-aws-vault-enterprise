@@ -1,0 +1,4 @@
+{{ with pkiCert "pki/issue/vault-server" "common_name=VAULT_FQDN_PLACEHOLDER" "ttl=168h" }}
+{{ .Cert }}
+{{ .CA }}
+{{ end }}
