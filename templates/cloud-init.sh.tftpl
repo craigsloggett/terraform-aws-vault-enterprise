@@ -72,6 +72,9 @@ vault_recovery_keys_secret_arn="${vault_recovery_keys_secret_arn}"
 vault_pki_organization="${vault_pki_organization}"
 vault_pki_country="${vault_pki_country}"
 
+# Vault Agent
+enable_vault_agent="${enable_vault_agent}"
+
 # EC2 metadata service (IMDSv2)
 imds_endpoint="http://169.254.169.254"
 imds_token_ttl="21600"
@@ -509,6 +512,15 @@ start_services() {
   systemctl enable --now vault
 
   log_info "All services started"
+}
+
+start_vault_agent() {
+  log_info "Enabling the Vault Agent service"
+
+  systemctl daemon-reload
+  systemctl enable --now vault-agent
+
+  log_info "Vault Agent service started"
 }
 
 wait_for_vault_api() {
@@ -995,6 +1007,10 @@ main() {
   replace_node_tls
   cleanup_bootstrap_tls
   write_vault_cli_config
+
+  if [ "$${enable_vault_agent}" = "true" ]; then
+    start_vault_agent
+  fi
 
   log_info "=== Bootstrap complete ==="
 }
