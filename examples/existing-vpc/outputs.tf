@@ -28,8 +28,8 @@ output "vault_snapshots_bucket" {
   value       = module.vault.vault_snapshots_bucket
 }
 
-output "vault_ca_cert" {
-  description = "CA certificate for trusting the Vault TLS chain."
-  value       = module.vault.vault_ca_cert
+output "vault_bootstrap_ca_cert" {
+  description = "Bootstrap TLS CA certificate for trusting the Vault TLS chain."
+  value       = module.vault.vault_bootstrap_ca_cert
   sensitive   = true
 }
