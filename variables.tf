@@ -183,8 +183,8 @@ variable "vault_pki_country" {
 
 variable "enable_vault_agent" {
   type        = bool
-  description = "Enable the Vault Agent service. When true, agent starts after the initial manual cert issuance and takes ownership of subsequent TLS certificate rotations. When false (default), agent files exist on disk but the service is not started."
-  default     = false
+  description = "Enable the Vault Agent service. When true (default), the agent handles initial TLS certificate issuance and ongoing rotation. When false, the legacy manual cert flow is used instead (preserved for rollback, scheduled for removal in a future release)."
+  default     = true
 }
 
 variable "vault_version" {
