@@ -470,20 +470,6 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Generate snapshot configuration
-# ---------------------------------------------------------------------------
-
-write_snapshot_config() {
-  log_info "Writing snapshot configuration"
-
-  cat >"$${snapshot_config_file}" <<'EOF'
-${config_snapshot_json}
-EOF
-  chown vault:vault "$${snapshot_config_file}"
-  chmod 0640 "$${snapshot_config_file}"
-}
-
-# ---------------------------------------------------------------------------
 # Enable and start services
 # ---------------------------------------------------------------------------
 
@@ -667,6 +653,41 @@ authenticate_vault() {
   export VAULT_CACERT="$${tls_ca_file}"
 
   log_info "Vault authentication configured"
+}
+
+# ---------------------------------------------------------------------------
+# Configure Raft Autopilot (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+configure_autopilot() {
+  log_info "Configuring Raft Autopilot"
+
+  vault operator raft autopilot set-config \
+    -cleanup-dead-servers=true \
+    -dead-server-last-contact-threshold=10m \
+    -min-quorum=${min_quorum}
+
+  log_info "Raft Autopilot configured"
+}
+
+# ---------------------------------------------------------------------------
+# Configure automated Raft snapshots (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+configure_snapshots() {
+  log_info "Configuring automated Raft snapshots"
+
+  cat >"$${snapshot_config_file}" <<'EOF'
+${config_snapshot_json}
+EOF
+
+  chown vault:vault "$${snapshot_config_file}"
+  chmod 0640 "$${snapshot_config_file}"
+
+  vault write sys/storage/raft/snapshot-auto/config/hourly \
+    @"$${snapshot_config_file}"
+
+  log_info "Automated Raft snapshots configured"
 }
 
 # ---------------------------------------------------------------------------
@@ -934,7 +955,6 @@ main() {
 
   write_secrets
   write_vault_config "$${private_ip}" "$${instance_id}" "$${availability_zone}"
-  write_snapshot_config
 
   start_services
   wait_for_vault_api
@@ -942,6 +962,8 @@ main() {
   if is_bootstrap_node; then
     init_cluster
     authenticate_vault
+    configure_autopilot
+    configure_snapshots
     configure_pki_engine
     configure_aws_auth
     issue_node_cert

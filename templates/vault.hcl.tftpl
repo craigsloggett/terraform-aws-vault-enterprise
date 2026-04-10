@@ -37,12 +37,6 @@ seal "awskms" {
   kms_key_id = "${kms_key_alias}"
 }
 
-autopilot {
-  cleanup_dead_servers               = true
-  dead_server_last_contact_threshold = "10m"
-  min_quorum                         = ${min_quorum}
-}
-
 telemetry {
   prometheus_retention_time = "24h"
   disable_hostname          = true
