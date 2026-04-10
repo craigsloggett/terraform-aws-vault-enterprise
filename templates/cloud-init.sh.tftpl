@@ -46,7 +46,7 @@ vault_config_dir="/etc/vault.d"
 vault_license_path="/opt/vault/vault.hclic"
 
 # An EBS data volume backs Raft state.
-# ebs_data_device_name is the attachment name from Terraform (e.g. /dev/sdf).
+# ebs_data_device_name is the attachment name from Terraform (e.g. /dev/xvdf).
 # On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
 ebs_data_device_name="${ebs_device_name}"
 ebs_data_mount="/opt/vault/data"
@@ -467,9 +467,6 @@ EOF
 
   chown vault:vault "$${vault_config_dir}/vault.hcl"
   chmod 0640 "$${vault_config_dir}/vault.hcl"
-
-  # Set permissions on data directory.
-  chown -R vault:vault "$${vault_data_dir}"
 }
 
 # ---------------------------------------------------------------------------
