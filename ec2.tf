@@ -87,6 +87,18 @@ resource "aws_launch_template" "vault" {
     }
   }
 
+  # vault-data: dedicated Raft storage volume, isolated from root IO.
+  block_device_mappings {
+    device_name = "/dev/xvdf"
+
+    ebs {
+      volume_type           = var.vault_data_disk.volume_type
+      volume_size           = var.vault_data_disk.volume_size
+      encrypted             = var.vault_data_disk.encrypted
+      delete_on_termination = true
+    }
+  }
+
   # vault-audit: isolated from root and data to prevent audit log growth
   # from impacting Vault availability. Audit logs are shipped off-node
   # in real-time — the local volume is a buffer only.

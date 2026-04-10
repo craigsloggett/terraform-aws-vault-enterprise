@@ -105,12 +105,26 @@ variable "vault_server_instance_type" {
 
 variable "root_volume_size" {
   type        = number
-  description = "Size in GiB of the root EBS volume for Vault nodes. Raft data is stored here when no separate data volume is attached."
+  description = "Size in GiB of the root EBS volume for Vault nodes."
   default     = 50
 
   validation {
     condition     = var.root_volume_size >= 20
     error_message = "Root volume must be at least 20 GiB."
+  }
+}
+
+variable "vault_data_disk" {
+  type = object({
+    volume_type = string
+    volume_size = number
+    encrypted   = bool
+  })
+  description = "EBS configuration for the Vault Raft data volume (/dev/xvdf)."
+  default = {
+    volume_type = "gp3"
+    volume_size = 100
+    encrypted   = true
   }
 }
 
