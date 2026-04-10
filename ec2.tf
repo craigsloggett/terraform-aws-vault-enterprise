@@ -60,6 +60,7 @@ resource "aws_launch_template" "vault" {
     vault_iam_role_arn             = aws_iam_role.vault.arn
     vault_root_token_secret_arn    = aws_secretsmanager_secret.vault_root_token.arn
     vault_recovery_keys_secret_arn = aws_secretsmanager_secret.vault_recovery_keys.arn
+    vault_minimum_quorum_size      = var.vault_node_count
 
     config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
       cluster_name      = var.project_name
@@ -69,8 +70,6 @@ resource "aws_launch_template" "vault" {
       cluster_tag_key   = local.cluster_tag_key
       cluster_tag_value = local.cluster_tag_value
     })
-
-    min_quorum = local.vault_node_count
 
     config_vault_service          = local.config_vault_service
     config_vault_service_override = local.config_vault_service_override

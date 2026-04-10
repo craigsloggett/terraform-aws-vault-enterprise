@@ -665,7 +665,7 @@ configure_autopilot() {
   vault operator raft autopilot set-config \
     -cleanup-dead-servers=true \
     -dead-server-last-contact-threshold=10m \
-    -min-quorum=${min_quorum}
+    -min-quorum=${vault_minimum_quorum_size}
 
   log_info "Raft Autopilot configured"
 }
