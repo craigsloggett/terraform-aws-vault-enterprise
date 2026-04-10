@@ -19,15 +19,21 @@ resource "aws_instance" "bastion" {
 
 # Vault Nodes
 
-resource "aws_instance" "vault" {
-  count = local.vault_node_count
+resource "aws_launch_template" "vault" {
+  name_prefix   = "${var.project_name}-vault-"
+  image_id      = var.ec2_ami.id
+  instance_type = var.vault_server_instance_type
+  key_name      = var.ec2_key_pair_name
 
-  ami                    = var.ec2_ami.id
-  instance_type          = var.vault_server_instance_type
-  key_name               = var.ec2_key_pair_name
-  subnet_id              = local.vpc.private_subnet_ids[count.index]
-  vpc_security_group_ids = [aws_security_group.vault.id]
-  iam_instance_profile   = aws_iam_instance_profile.vault.name
+  iam_instance_profile {
+    name = aws_iam_instance_profile.vault.name
+  }
+
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.vault.id]
+    delete_on_termination       = true
+  }
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -35,10 +41,11 @@ resource "aws_instance" "vault" {
     http_put_response_hop_limit = 1
   }
 
-  user_data_base64 = base64gzip(templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
+  user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
     vault_version                = var.vault_version
     region                       = data.aws_region.current.region
     ebs_device_name              = local.ebs_device_name
+    ebs_audit_device_name        = local.ebs_audit_device_name
     vault_license_secret_arn     = aws_secretsmanager_secret.vault_license.arn
     vault_ca_cert_secret_arn     = aws_secretsmanager_secret.vault_ca_cert.arn
     vault_server_cert_secret_arn = aws_secretsmanager_secret.vault_server_cert.arn
@@ -53,11 +60,11 @@ resource "aws_instance" "vault" {
     vault_iam_role_arn             = aws_iam_role.vault.arn
     vault_root_token_secret_arn    = aws_secretsmanager_secret.vault_root_token.arn
     vault_recovery_keys_secret_arn = aws_secretsmanager_secret.vault_recovery_keys.arn
+    vault_minimum_quorum_size      = var.vault_node_count
 
     config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
       cluster_name      = var.project_name
       vault_fqdn        = trimsuffix(aws_route53_record.vault.fqdn, ".")
-      node_id           = "vault-${count.index}"
       region            = data.aws_region.current.region
       kms_key_alias     = aws_kms_alias.vault.name
       cluster_tag_key   = local.cluster_tag_key
@@ -69,17 +76,65 @@ resource "aws_instance" "vault" {
     config_snapshot_json          = local.config_snapshot_json
   }))
 
-  tags = merge(var.common_tags, {
-    Name                    = "${var.project_name}-vault-${count.index}"
-    (local.cluster_tag_key) = local.cluster_tag_value
-  })
+  block_device_mappings {
+    device_name = "/dev/sda1"
 
-  depends_on = [
-    aws_iam_role_policy.vault_kms,
-    aws_iam_role_policy.vault_secrets_manager,
-  ]
+    ebs {
+      volume_type           = "gp3"
+      volume_size           = var.root_volume_size
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
+  # vault-data: dedicated Raft storage volume, isolated from root IO.
+  block_device_mappings {
+    device_name = "/dev/xvdf"
+
+    ebs {
+      volume_type           = var.vault_data_disk.volume_type
+      volume_size           = var.vault_data_disk.volume_size
+      iops                  = var.vault_data_disk.iops
+      throughput            = var.vault_data_disk.throughput
+      encrypted             = var.vault_data_disk.encrypted
+      delete_on_termination = true
+    }
+  }
+
+  # vault-audit: isolated from root and data to prevent audit log growth
+  # from impacting Vault availability. Audit logs are shipped off-node
+  # in real-time — the local volume is a buffer only.
+  block_device_mappings {
+    device_name = "/dev/xvdg"
+
+    ebs {
+      volume_type           = var.vault_audit_disk.volume_type
+      volume_size           = var.vault_audit_disk.volume_size
+      encrypted             = var.vault_audit_disk.encrypted
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = merge(var.common_tags, {
+      Name                    = "${var.project_name}-vault"
+      (local.cluster_tag_key) = local.cluster_tag_value
+    })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+
+    tags = merge(var.common_tags, {
+      Name = "${var.project_name}-vault"
+    })
+  }
 
   lifecycle {
+    create_before_destroy = true
+
     precondition {
       condition     = can(regex("(ubuntu|debian)", lower(var.ec2_ami.name)))
       error_message = "The provided AMI must be Ubuntu or Debian-based."
@@ -87,23 +142,51 @@ resource "aws_instance" "vault" {
   }
 }
 
-# EBS Volumes for Raft Storage
+# EBS volumes for Raft data (/dev/xvdf) and audit logs (/dev/xvdg) are defined
+# in the launch template's block_device_mappings. The cloud-init script's
+# prepare_disk function discovers, formats, and mounts each volume at boot.
 
-resource "aws_ebs_volume" "vault" {
-  count = local.vault_node_count
+resource "aws_autoscaling_group" "vault" {
+  name_prefix = "${var.project_name}-vault-"
 
-  availability_zone = local.azs[count.index]
-  size              = var.vault_ebs_volume_size
-  type              = "gp3"
-  encrypted         = true
+  min_size         = var.vault_node_count
+  max_size         = var.vault_node_count
+  desired_capacity = var.vault_node_count
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-data-${count.index}" })
-}
+  vpc_zone_identifier = local.vpc.private_subnet_ids
 
-resource "aws_volume_attachment" "vault" {
-  count = local.vault_node_count
+  launch_template {
+    id      = aws_launch_template.vault.id
+    version = "$Latest"
+  }
 
-  device_name = local.ebs_device_name
-  volume_id   = aws_ebs_volume.vault[count.index].id
-  instance_id = aws_instance.vault[count.index].id
+  health_check_type         = "ELB"
+  health_check_grace_period = 900
+
+  target_group_arns = [aws_lb_target_group.vault.arn]
+
+  instance_refresh {
+    strategy = "Rolling"
+
+    preferences {
+      min_healthy_percentage = local.instance_refresh_min_healthy_pct
+    }
+  }
+
+  dynamic "tag" {
+    for_each = merge(var.common_tags, {
+      (local.cluster_tag_key) = local.cluster_tag_value
+    })
+
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy.vault_kms,
+    aws_iam_role_policy.vault_secrets_manager,
+  ]
 }

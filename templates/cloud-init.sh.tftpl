@@ -46,11 +46,16 @@ vault_config_dir="/etc/vault.d"
 vault_license_path="/opt/vault/vault.hclic"
 
 # An EBS data volume backs Raft state.
-# ebs_data_device_name is the attachment name from Terraform (e.g. /dev/sdf).
+# ebs_data_device_name is the attachment name from Terraform (e.g. /dev/xvdf).
 # On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
 ebs_data_device_name="${ebs_device_name}"
 ebs_data_mount="/opt/vault/data"
-ebs_data_filesystem="xfs"
+
+# An EBS audit volume provides IO isolation for audit logs.
+# ebs_audit_device_name is the attachment name from Terraform (e.g. /dev/xvdg).
+# On Nitro instances this appears as /dev/nvme*n1 and ebsnvme-id resolves it.
+ebs_audit_device_name="${ebs_audit_device_name}"
+ebs_audit_mount="/var/log/vault"
 
 # TLS
 tls_ca_file="/opt/vault/tls/ca.crt"
@@ -125,6 +130,11 @@ get_private_ip() {
 get_instance_id() {
   token="$(imds_token)"
   imds_get "instance-id" "$${token}"
+}
+
+get_availability_zone() {
+  token="$(imds_token)"
+  imds_get "placement/availability-zone" "$${token}"
 }
 
 # ---------------------------------------------------------------------------
@@ -215,7 +225,7 @@ configure_time() {
 }
 
 # ---------------------------------------------------------------------------
-# EBS data volume — discover, format, and mount
+# EBS volumes — discover, format, and mount
 # ---------------------------------------------------------------------------
 
 resolve_ebs_nvme_device() {
@@ -245,41 +255,57 @@ resolve_ebs_nvme_device() {
   return 1
 }
 
-mount_data_volume() {
-  log_info "Resolving EBS volume attached as $${ebs_data_device_name}"
+prepare_disk() {
+  device_attachment_name="$${1}"
+  mount_point="$${2}"
+  fs_label="$${3}"
+
+  log_info "Resolving EBS volume attached as $${device_attachment_name}"
 
   if ! command -v ebsnvme-id >/dev/null 2>&1; then
     log_error "ebsnvme-id not found — ensure amazon-ec2-utils is installed in the AMI"
     return 1
   fi
 
-  device="$(resolve_ebs_nvme_device "$${ebs_data_device_name}")" || {
-    log_error "No NVMe device found matching EBS attachment $${ebs_data_device_name}"
-    return 1
-  }
+  attempts=0
+  max_attempts=12
+  device=""
 
-  log_info "Matched $${ebs_data_device_name} -> $${device}"
+  while true; do
+    device="$(resolve_ebs_nvme_device "$${device_attachment_name}")" && break
+
+    attempts=$((attempts + 1))
+    if [ "$${attempts}" -ge "$${max_attempts}" ]; then
+      log_error "No NVMe device found matching $${device_attachment_name} after $${max_attempts} attempts"
+      return 1
+    fi
+
+    log_info "Device not yet visible, retrying ($${attempts}/$${max_attempts})"
+    sleep 5
+  done
+
+  log_info "Matched $${device_attachment_name} -> $${device}"
 
   # Format only if the device has no existing filesystem
   if ! blkid -p "$${device}" >/dev/null 2>&1; then
-    log_info "Formatting $${device} as $${ebs_data_filesystem}"
-    "mkfs.$${ebs_data_filesystem}" "$${device}"
+    log_info "No filesystem on $${device} — formatting as xfs (label=$${fs_label})"
+    mkfs.xfs -L "$${fs_label}" "$${device}"
   else
-    log_info "Filesystem already present on $${device}, skipping format"
+    log_info "Filesystem already present on $${device} — skipping format"
   fi
 
   # Mount
-  mkdir -p "$${ebs_data_mount}"
-  mount -t "$${ebs_data_filesystem}" "$${device}" "$${ebs_data_mount}"
-  log_info "Mounted $${device} at $${ebs_data_mount}"
+  mkdir -p "$${mount_point}"
+  mount -t xfs "$${device}" "$${mount_point}"
+  log_info "Mounted $${device} at $${mount_point}"
 
   # Persist in fstab (use UUID for stability across reboots)
   uuid="$(blkid -s UUID -o value "$${device}")"
   if ! grep -q "$${uuid}" /etc/fstab; then
-    printf 'UUID=%s  %s  %s  defaults,nofail  0  2\n' \
-      "$${uuid}" "$${ebs_data_mount}" "$${ebs_data_filesystem}" \
+    printf 'UUID=%s  %s  xfs  defaults,nofail  0  2\n' \
+      "$${uuid}" "$${mount_point}" \
       >>/etc/fstab
-    log_info "Added fstab entry for UUID=$${uuid}"
+    log_info "Added fstab entry for UUID=$${uuid} ($${fs_label})"
   fi
 }
 
@@ -292,13 +318,25 @@ create_vault_user() {
 
   groupadd --system vault
   useradd --system -g vault -d /etc/vault.d -s /bin/false vault
+}
+
+# ---------------------------------------------------------------------------
+# Create the Vault directory tree and set ownership
+#
+# Called after EBS volumes are mounted so that ownership is applied to the
+# mount roots, not the underlying directories that are hidden by the mount.
+# ---------------------------------------------------------------------------
+
+create_directory_tree() {
+  log_info "Creating Vault directory tree"
 
   mkdir -p /etc/vault.d/tls
   mkdir -p /opt/vault/tls
   mkdir -p /opt/vault/data
+  mkdir -p /var/log/vault
 
-  chown -R vault:vault /etc/vault.d /opt/vault
-  chmod 750 /etc/vault.d /opt/vault
+  chown -R vault:vault /etc/vault.d /opt/vault /var/log/vault
+  chmod 750 /etc/vault.d /opt/vault /var/log/vault
 }
 
 # ---------------------------------------------------------------------------
@@ -417,6 +455,8 @@ write_secrets() {
 
 write_vault_config() {
   private_ip="$${1}"
+  instance_id="$${2}"
+  availability_zone="$${3}"
 
   log_info "Writing Vault configuration (bind=$${private_ip})"
 
@@ -427,23 +467,6 @@ EOF
 
   chown vault:vault "$${vault_config_dir}/vault.hcl"
   chmod 0640 "$${vault_config_dir}/vault.hcl"
-
-  # Set permissions on data directory.
-  chown -R vault:vault "$${vault_data_dir}"
-}
-
-# ---------------------------------------------------------------------------
-# Generate snapshot configuration
-# ---------------------------------------------------------------------------
-
-write_snapshot_config() {
-  log_info "Writing snapshot configuration"
-
-  cat >"$${snapshot_config_file}" <<'EOF'
-${config_snapshot_json}
-EOF
-  chown vault:vault "$${snapshot_config_file}"
-  chmod 0640 "$${snapshot_config_file}"
 }
 
 # ---------------------------------------------------------------------------
@@ -633,6 +656,41 @@ authenticate_vault() {
 }
 
 # ---------------------------------------------------------------------------
+# Configure Raft Autopilot (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+configure_autopilot() {
+  log_info "Configuring Raft Autopilot"
+
+  vault operator raft autopilot set-config \
+    -cleanup-dead-servers=true \
+    -dead-server-last-contact-threshold=10m \
+    -min-quorum=${vault_minimum_quorum_size}
+
+  log_info "Raft Autopilot configured"
+}
+
+# ---------------------------------------------------------------------------
+# Configure automated Raft snapshots (bootstrap node only)
+# ---------------------------------------------------------------------------
+
+configure_snapshots() {
+  log_info "Configuring automated Raft snapshots"
+
+  cat >"$${snapshot_config_file}" <<'EOF'
+${config_snapshot_json}
+EOF
+
+  chown vault:vault "$${snapshot_config_file}"
+  chmod 0640 "$${snapshot_config_file}"
+
+  vault write sys/storage/raft/snapshot-auto/config/hourly \
+    @"$${snapshot_config_file}"
+
+  log_info "Automated Raft snapshots configured"
+}
+
+# ---------------------------------------------------------------------------
 # Configure the Vault PKI secrets engine (bootstrap node only)
 # ---------------------------------------------------------------------------
 
@@ -714,6 +772,13 @@ EOF
     bound_iam_principal_arn="$${vault_iam_role_arn}" \
     policies=vault-server \
     ttl=1h
+
+  # Enable the file audit device. /var/log/vault is on a dedicated EBS volume
+  # (see prepare_disk in main) to isolate audit log IO and growth from the
+  # root filesystem.
+  if ! vault audit list -format=json | jq -e '."file/"' >/dev/null 2>&1; then
+    vault audit enable file file_path=/var/log/vault/vault-audit.log
+  fi
 
   log_info "Writing PKI state: ready"
   aws ssm put-parameter \
@@ -875,19 +940,21 @@ main() {
 
   private_ip="$(get_private_ip)"
   instance_id="$(get_instance_id)"
+  availability_zone="$(get_availability_zone)"
 
-  log_info "Instance $${instance_id} at $${private_ip}"
+  log_info "Instance $${instance_id} at $${private_ip} in $${availability_zone}"
 
   prepare_system
   configure_time
   create_vault_user
-  mount_data_volume
+  prepare_disk "$${ebs_data_device_name}" "$${ebs_data_mount}" "vault-data"
+  prepare_disk "$${ebs_audit_device_name}" "$${ebs_audit_mount}" "vault-audit"
+  create_directory_tree
   install_vault
   write_vault_systemd_unit
 
   write_secrets
-  write_vault_config "$${private_ip}"
-  write_snapshot_config
+  write_vault_config "$${private_ip}" "$${instance_id}" "$${availability_zone}"
 
   start_services
   wait_for_vault_api
@@ -895,6 +962,8 @@ main() {
   if is_bootstrap_node; then
     init_cluster
     authenticate_vault
+    configure_autopilot
+    configure_snapshots
     configure_pki_engine
     configure_aws_auth
     issue_node_cert

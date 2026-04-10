@@ -86,16 +86,62 @@ variable "ec2_ami" {
   description = "AMI to use for EC2 instances. Must be Ubuntu or Debian-based."
 }
 
+variable "vault_node_count" {
+  type        = number
+  description = "Number of Vault nodes in the cluster. Must be 3 or 5 for Raft quorum."
+  default     = 3
+
+  validation {
+    condition     = contains([3, 5], var.vault_node_count)
+    error_message = "Must be 3 or 5."
+  }
+}
+
 variable "vault_server_instance_type" {
   type        = string
   description = "EC2 instance type for Vault server nodes."
   default     = "m5.large"
 }
 
-variable "vault_ebs_volume_size" {
+variable "root_volume_size" {
   type        = number
-  description = "Size in GiB of the EBS volume for Vault Raft storage."
-  default     = 100
+  description = "Size in GiB of the root EBS volume for Vault nodes."
+  default     = 50
+
+  validation {
+    condition     = var.root_volume_size >= 20
+    error_message = "Root volume must be at least 20 GiB."
+  }
+}
+
+variable "vault_data_disk" {
+  type = object({
+    volume_type = string
+    volume_size = number
+    iops        = optional(number, 3000)
+    throughput  = optional(number, 125)
+    encrypted   = bool
+  })
+  description = "EBS configuration for the Vault Raft data volume (/dev/xvdf)."
+  default = {
+    volume_type = "gp3"
+    volume_size = 100
+    encrypted   = true
+  }
+}
+
+variable "vault_audit_disk" {
+  type = object({
+    volume_type = string
+    volume_size = number
+    encrypted   = bool
+  })
+  description = "EBS configuration for the Vault audit log volume (/dev/xvdg)."
+  default = {
+    volume_type = "gp3"
+    volume_size = 50
+    encrypted   = true
+  }
 }
 
 variable "bastion_instance_type" {

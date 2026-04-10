@@ -8,9 +8,9 @@ output "bastion_public_ip" {
   value       = aws_instance.bastion.public_ip
 }
 
-output "vault_server_private_ips" {
-  description = "Private IPs of the Vault nodes."
-  value       = aws_instance.vault[*].private_ip
+output "vault_asg_name" {
+  description = "Name of the Vault Auto Scaling Group."
+  value       = aws_autoscaling_group.vault.name
 }
 
 output "vault_kms_key_id" {
