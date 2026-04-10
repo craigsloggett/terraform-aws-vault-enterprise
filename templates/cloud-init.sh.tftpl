@@ -318,6 +318,17 @@ create_vault_user() {
 
   groupadd --system vault
   useradd --system -g vault -d /etc/vault.d -s /bin/false vault
+}
+
+# ---------------------------------------------------------------------------
+# Create the Vault directory tree and set ownership
+#
+# Called after EBS volumes are mounted so that ownership is applied to the
+# mount roots, not the underlying directories that are hidden by the mount.
+# ---------------------------------------------------------------------------
+
+create_directory_tree() {
+  log_info "Creating Vault directory tree"
 
   mkdir -p /etc/vault.d/tls
   mkdir -p /opt/vault/tls
@@ -918,8 +929,9 @@ main() {
   prepare_system
   configure_time
   create_vault_user
-  prepare_disk "$${ebs_data_device_name}"  "$${ebs_data_mount}"  "vault-data"
+  prepare_disk "$${ebs_data_device_name}" "$${ebs_data_mount}" "vault-data"
   prepare_disk "$${ebs_audit_device_name}" "$${ebs_audit_mount}" "vault-audit"
+  create_directory_tree
   install_vault
   write_vault_systemd_unit
 
