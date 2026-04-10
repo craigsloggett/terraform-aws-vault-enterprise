@@ -466,8 +466,8 @@ wait_for_vault_api() {
     # We capture the HTTP status and treat anything other than 000 (no connection)
     # as success (501 means uninitialized, 503 means sealed, 200/429 means
     # active/standby). All indicate the API is up and TLS is working.
-    # -k is intentional: the bootstrap cert is self-signed and we are connecting
-    # to 127.0.0.1, so hostname validation provides no security here.
+    # -k is intentional: the bootstrap cert is self-signed and we connect to
+    # 127.0.0.1 during bootstrap, so hostname validation is not meaningful here.
     status="$(curl -sk -o /dev/null -w '%%{http_code}' \
       "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null)" || true
 
