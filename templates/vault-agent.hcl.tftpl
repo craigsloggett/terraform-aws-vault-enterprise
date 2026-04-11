@@ -20,11 +20,11 @@ template {
   source      = "/etc/vault-agent/templates/server.crt.ctmpl"
   destination = "/opt/vault/tls/server.crt"
   perms       = "0640"
-  command     = "/bin/sh -c 'kill -HUP $(systemctl show --property MainPID --value vault.service)'"
 }
 
 template {
   source      = "/etc/vault-agent/templates/server.key.ctmpl"
   destination = "/opt/vault/tls/server.key"
   perms       = "0640"
+  command     = "/bin/sh -c 'kill -HUP $(systemctl show --property MainPID --value vault.service)'"
 }
