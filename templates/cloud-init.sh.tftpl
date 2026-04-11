@@ -830,10 +830,10 @@ CTMPL_KEY
 set -e
 cert_file="/opt/vault/tls/server.crt"
 key_file="/opt/vault/tls/server.key"
-[ -f "$cert_file" ] && [ -f "$key_file" ] || exit 0
-cert_pub=$(openssl x509 -noout -pubkey -in "$cert_file" 2>/dev/null)
-key_pub=$(openssl pkey -pubout -in "$key_file" 2>/dev/null)
-[ "$cert_pub" = "$key_pub" ] || exit 0
+[ -f "$${cert_file}" ] && [ -f "$${key_file}" ] || exit 0
+cert_pub=$(openssl x509 -noout -pubkey -in "$${cert_file}" 2>/dev/null)
+key_pub=$(openssl pkey -pubout -in "$${key_file}" 2>/dev/null)
+[ "$${cert_pub}" = "$${key_pub}" ] || exit 0
 kill -HUP $(systemctl show --property MainPID --value vault.service)
 RELOAD_SCRIPT
   chown vault:vault /opt/vault/agent/reload-vault-tls.sh
