@@ -22,10 +22,14 @@ locals {
     vault_fqdn = local.vault_fqdn
   })
   config_server_crt_ctmpl = templatefile("${path.module}/templates/server.crt.ctmpl.tftpl", {
-    vault_fqdn = local.vault_fqdn
+    vault_fqdn             = local.vault_fqdn
+    vault_pki_organization = var.vault_pki_organization
+    vault_pki_country      = var.vault_pki_country
   })
   config_server_key_ctmpl = templatefile("${path.module}/templates/server.key.ctmpl.tftpl", {
-    vault_fqdn = local.vault_fqdn
+    vault_fqdn             = local.vault_fqdn
+    vault_pki_organization = var.vault_pki_organization
+    vault_pki_country      = var.vault_pki_country
   })
 
   config_snapshot_json = templatefile("${path.module}/templates/snapshot.json.tftpl", {
