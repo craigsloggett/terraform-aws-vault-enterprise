@@ -156,24 +156,18 @@ fetch_secret() {
 wait_for_network() {
   log_info "Waiting for network to become available"
 
-  attempts=0
-  max_attempts=60
-
-  while true; do
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
     if ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
       log_info "Network is available"
       return 0
     fi
 
-    attempts=$((attempts + 1))
-    if [ "$${attempts}" -ge "$${max_attempts}" ]; then
-      log_error "Network did not become available after $${max_attempts} attempts"
-      return 1
-    fi
-
-    log_info "Network not yet available, retrying ($${attempts}/$${max_attempts})"
-    sleep 2
+    log_info "Network not yet available, retrying ($${attempt}/12)"
+    sleep 10
   done
+
+  log_error "Network did not become available after 2 minutes"
+  return 1
 }
 
 # ---------------------------------------------------------------------------
