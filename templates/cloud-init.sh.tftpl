@@ -900,7 +900,7 @@ EOF
   chown vault:vault "$${vault_agent_config_file}"
   chmod 0644 "$${vault_agent_config_file}"
 
-  cat >"$${vault_agent_server_tls_template_file}" <<'EOF'
+  cat >"$${vault_agent_server_tls_template_file}" <<EOF
 ${config_server_ctmpl}
 EOF
   chown vault:vault "$${vault_agent_server_tls_template_file}"
