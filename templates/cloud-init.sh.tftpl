@@ -308,11 +308,11 @@ configure_vault_directories() {
 
   mkdir -p "$${vault_config_dir}"
   chown root:vault "$${vault_config_dir}"
-  chmod 750 "$${vault_config_dir}"
+  chmod 755 "$${vault_config_dir}"
 
   mkdir -p "$${vault_log_dir}"
   chown vault:vault "$${vault_log_dir}"
-  chmod 750 "$${vault_log_dir}"
+  chmod 755 "$${vault_log_dir}"
 
   mkdir -p "$${vault_tls_dir}"
   chown vault:vault "$${vault_tls_dir}"
