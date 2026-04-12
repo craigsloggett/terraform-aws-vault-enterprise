@@ -393,7 +393,7 @@ install_vault() {
 write_vault_systemd_unit() {
   log_info "Writing Vault systemd unit"
 
-  cat >/etc/systemd/system/vault.service <<'EOF'
+  cat >/etc/systemd/system/vault.service <<EOF
 ${config_vault_service}
 EOF
 
