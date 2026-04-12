@@ -327,6 +327,10 @@ configure_vault_directories() {
   mkdir -p "$${vault_agent_template_dir}"
   chown vault:vault "$${vault_agent_template_dir}"
   chmod 755 "$${vault_agent_template_dir}"
+
+  mkdir -p "$${vault_agent_template_commands_dir}"
+  chown root:root "$${vault_agent_template_commands_dir}"
+  chmod 755 "$${vault_agent_template_commands_dir}"
 }
 
 # ---------------------------------------------------------------------------
