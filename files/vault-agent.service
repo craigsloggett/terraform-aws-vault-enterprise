@@ -3,13 +3,13 @@ Description=HashiCorp Vault Agent
 Documentation=https://developer.hashicorp.com/vault/docs/agent-and-proxy/agent
 Requires=vault.service
 After=vault.service
-ConditionFileNotEmpty="${vault_agent_config_file}"
+ConditionFileNotEmpty=${vault_agent_config_file}
 
 [Service]
 Type=notify
 User=vault
 Group=vault
-ExecStart=/usr/bin/vault agent -config="${vault_agent_config_file}"
+ExecStart=/usr/bin/vault agent -config=${vault_agent_config_file}
 RuntimeDirectory=vault
 RuntimeDirectoryMode=0755
 KillMode=process
