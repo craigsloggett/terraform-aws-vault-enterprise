@@ -150,12 +150,11 @@ main() {
   ca_cert="$(get_bootstrap_root_ca "$${bootstrap_tls_ca_cert_secret_arn}")"
   server_cert="$(get_bootstrap_tls_cert "$${bootstrap_tls_server_cert_secret_arn}")"
   server_key="$(get_bootstrap_tls_key "$${bootstrap_tls_server_key_secret_arn}")"
+  write_vault_license "$${vault_license}" "$${vault_license_file}"
   write_tls_materials \
-    "$${vault_license}" \
     "$${ca_cert}" \
     "$${server_cert}" \
     "$${server_key}" \
-    "$${vault_license_file}" \
     "$${vault_tls_ca_file}" \
     "$${vault_tls_cert_file}" \
     "$${vault_tls_key_file}"

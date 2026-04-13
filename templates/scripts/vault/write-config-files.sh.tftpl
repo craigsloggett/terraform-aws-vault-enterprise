@@ -34,20 +34,23 @@ EOF
   chmod 0600 /etc/systemd/system/vault.service.d/override.conf
 }
 
-write_tls_materials() {
+write_vault_license() {
   vault_license="$${1}"
-  ca_cert="$${2}"
-  server_cert="$${3}"
-  server_key="$${4}"
-  vault_license_file="$${5}"
-  vault_tls_ca_file="$${6}"
-  vault_tls_cert_file="$${7}"
-  vault_tls_key_file="$${8}"
+  vault_license_file="$${2}"
 
   log_info "Writing the Vault license"
   printf '%s\n' "$${vault_license}" >"$${vault_license_file}"
   chown vault:vault "$${vault_license_file}"
   chmod 0640 "$${vault_license_file}"
+}
+
+write_tls_materials() {
+  ca_cert="$${1}"
+  server_cert="$${2}"
+  server_key="$${3}"
+  vault_tls_ca_file="$${4}"
+  vault_tls_cert_file="$${5}"
+  vault_tls_key_file="$${6}"
 
   log_info "Writing bootstrap TLS certificates"
   printf '%s\n' "$${ca_cert}" >"$${vault_tls_ca_file}"
