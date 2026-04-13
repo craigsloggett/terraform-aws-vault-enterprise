@@ -117,9 +117,9 @@ ${script_vault_cli}
 main() {
   wait_for_network
 
-  private_ip="$$(get_private_ip)"
-  instance_id="$$(get_instance_id)"
-  availability_zone="$$(get_availability_zone)"
+  private_ip="$(get_private_ip)"
+  instance_id="$(get_instance_id)"
+  availability_zone="$(get_availability_zone)"
 
   log_info "Instance $${instance_id} at $${private_ip} in $${availability_zone}"
 

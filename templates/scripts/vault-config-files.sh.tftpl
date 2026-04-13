@@ -29,10 +29,10 @@ EOF
 write_secrets() {
   log_info "Fetching secrets from AWS Secrets Manager"
 
-  vault_license="$$(fetch_secret "$${region}" "$${vault_license_secret_arn}")"
-  ca_cert="$$(fetch_secret "$${region}" "$${bootstrap_tls_ca_cert_secret_arn}")"
-  server_cert="$$(fetch_secret "$${region}" "$${bootstrap_tls_server_cert_secret_arn}")"
-  server_key="$$(fetch_secret "$${region}" "$${bootstrap_tls_server_key_secret_arn}")"
+  vault_license="$(fetch_secret "$${region}" "$${vault_license_secret_arn}")"
+  ca_cert="$(fetch_secret "$${region}" "$${bootstrap_tls_ca_cert_secret_arn}")"
+  server_cert="$(fetch_secret "$${region}" "$${bootstrap_tls_server_cert_secret_arn}")"
+  server_key="$(fetch_secret "$${region}" "$${bootstrap_tls_server_key_secret_arn}")"
 
   # Write the license file
   log_info "Writing the Vault license"
