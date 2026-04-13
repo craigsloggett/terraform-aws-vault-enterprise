@@ -64,16 +64,16 @@ resource "aws_launch_template" "vault" {
     script_system_setup            = local.script_system_setup
 
     # Vault system setup
-    script_vault_write_system = local.script_vault_write_system
-    script_vault_install      = local.script_vault_install
+    script_vault_configure_linux = local.script_vault_configure_linux
+    script_vault_install         = local.script_vault_install
 
     # Vault secrets and configuration
-    script_vault_get_license                 = local.script_vault_get_license
-    script_vault_get_bootstrap_tls_materials = local.script_vault_get_bootstrap_tls_materials
-    script_vault_write_systemd_unit          = local.script_vault_write_systemd_unit
-    script_vault_write_license               = local.script_vault_write_license
-    script_vault_write_tls_materials         = local.script_vault_write_tls_materials
-    script_vault_write_config                = local.script_vault_write_config
+    script_vault_get_license                   = local.script_vault_get_license
+    script_vault_get_bootstrap_tls_materials   = local.script_vault_get_bootstrap_tls_materials
+    script_vault_write_systemd_unit            = local.script_vault_write_systemd_unit
+    script_vault_write_license                 = local.script_vault_write_license
+    script_vault_write_bootstrap_tls_materials = local.script_vault_write_bootstrap_tls_materials
+    script_vault_write_config                  = local.script_vault_write_config
 
     # Cluster initialization and Raft
     script_vault_initialize_cluster    = local.script_vault_initialize_cluster
@@ -89,10 +89,8 @@ resource "aws_launch_template" "vault" {
     script_vault_configure_audit    = local.script_vault_configure_audit
 
     # TLS rotation
-    script_vault_configure_tls = local.script_vault_configure_tls
-
-    # Vault CLI
-    script_vault_write_cli_config = local.script_vault_write_cli_config
+    script_vault_configure_bootstrap_tls = local.script_vault_configure_bootstrap_tls
+    script_vault_write_pki_tls_materials = local.script_vault_write_pki_tls_materials
 
     # Vault Agent
     script_agent_write_config        = local.script_agent_write_config

@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# write-tls-materials.sh — Write bootstrap TLS certificates to disk.
+# write-bootstrap-tls-materials.sh — Write bootstrap TLS certificates to disk.
 
 write_bootstrap_root_ca() {
   vault_tls_ca_file="${1}"

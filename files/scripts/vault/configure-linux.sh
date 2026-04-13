@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# write-system.sh — Vault OS user and directory tree setup.
+# configure-linux.sh — Vault OS user, directory tree, and CLI environment setup.
 
 create_vault_user() {
   vault_home_dir="${1}"
@@ -53,4 +53,17 @@ configure_vault_directories() {
   mkdir -p "${vault_agent_template_dir}"
   chown vault:vault "${vault_agent_template_dir}"
   chmod 755 "${vault_agent_template_dir}"
+}
+
+write_vault_cli_config() {
+  vault_fqdn="${1}"
+  vault_tls_ca_file="${2}"
+
+  log_info "Writing Vault CLI environment to /etc/profile.d/99-vault-cli-config.sh"
+
+  cat >/etc/profile.d/99-vault-cli-config.sh <<EOF
+export VAULT_ADDR="https://127.0.0.1:8200"
+export VAULT_TLS_SERVER_NAME="${vault_fqdn}"
+export VAULT_CACERT="${vault_tls_ca_file}"
+EOF
 }

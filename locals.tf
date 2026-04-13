@@ -68,7 +68,7 @@ locals {
   # Cloud-init scripts — Vault system setup
   # ---------------------------------------------------------------------------
 
-  script_vault_write_system = file("${path.module}/files/scripts/vault/write-system.sh")
+  script_vault_configure_linux = file("${path.module}/files/scripts/vault/configure-linux.sh")
 
   script_vault_install = templatefile("${path.module}/templates/scripts/vault/install.sh.tftpl", {
     vault_version = var.vault_version
@@ -93,8 +93,8 @@ locals {
     config_vault_service_override = local.config_vault_service_override
   })
 
-  script_vault_write_license       = file("${path.module}/files/scripts/vault/write-license.sh")
-  script_vault_write_tls_materials = file("${path.module}/files/scripts/vault/write-tls-materials.sh")
+  script_vault_write_license                 = file("${path.module}/files/scripts/vault/write-license.sh")
+  script_vault_write_bootstrap_tls_materials = file("${path.module}/files/scripts/vault/write-bootstrap-tls-materials.sh")
 
   script_vault_write_config = templatefile("${path.module}/templates/scripts/vault/write-config.sh.tftpl", {
     config_vault_hcl = local.config_vault_hcl
@@ -144,13 +144,8 @@ locals {
   # Cloud-init scripts — TLS rotation
   # ---------------------------------------------------------------------------
 
-  script_vault_configure_tls = file("${path.module}/files/scripts/vault/configure-tls.sh")
-
-  # ---------------------------------------------------------------------------
-  # Cloud-init scripts — Vault CLI
-  # ---------------------------------------------------------------------------
-
-  script_vault_write_cli_config = file("${path.module}/files/scripts/vault/write-cli-config.sh")
+  script_vault_configure_bootstrap_tls = file("${path.module}/files/scripts/vault/configure-bootstrap-tls.sh")
+  script_vault_write_pki_tls_materials = file("${path.module}/files/scripts/vault/write-pki-tls-materials.sh")
 
   # ---------------------------------------------------------------------------
   # Cloud-init scripts — Vault Agent
