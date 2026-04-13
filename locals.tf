@@ -115,7 +115,7 @@ locals {
     vault_iam_role_arn = aws_iam_role.vault.arn
   })
 
-  script_vault_audit = file("${path.module}/templates/scripts/vault-audit.sh.tftpl")
+  script_vault_audit = file("${path.module}/files/scripts/vault-audit.sh")
 
   script_agent_write_config = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-config.sh.tftpl", {
     config_agent_hcl = local.config_agent_hcl
