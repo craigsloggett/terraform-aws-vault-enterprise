@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# configure-snapshots.sh — Configure automated Raft snapshots.
+# vault-snapshots.sh — Configure automated Raft snapshots.
 
 configure_snapshots() {
   vault_snapshot_config_file="${1}"

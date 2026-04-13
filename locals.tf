@@ -97,7 +97,7 @@ locals {
     vault_minimum_quorum_size = var.vault_node_count
   })
 
-  script_vault_configure_snapshots = file("${path.module}/files/scripts/configure-snapshots.sh")
+  script_vault_configure_snapshots = file("${path.module}/files/scripts/vault-snapshots.sh")
 
   script_vault_cluster = templatefile("${path.module}/templates/scripts/vault-initialize-cluster.sh.tftpl", {
     cluster_tag_key                = local.cluster_tag_key
