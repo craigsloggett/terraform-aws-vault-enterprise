@@ -96,14 +96,18 @@ ${script_agent_write_config_files}
 main() {
   wait_for_network
 
+  # Environment
   export AWS_REGION="${region}"
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TLS_SERVER_NAME="$${vault_fqdn}"
   export VAULT_CACERT="$${vault_tls_ca_file}"
 
+  # System preparation
   prepare_system
   configure_time
   create_vault_user "$${vault_home_dir}"
+
+  # EBS volumes
   raft_device="$(get_ebs_device "${ebs_raft_device_name}")"
   audit_device="$(get_ebs_device "${ebs_audit_device_name}")"
   format_disk "$${raft_device}" "vault-raft-data"
@@ -112,6 +116,8 @@ main() {
   mount_disk "$${audit_device}" "$${vault_log_dir}"
   write_fstab "$${raft_device}" "$${vault_raft_dir}"
   write_fstab "$${audit_device}" "$${vault_log_dir}"
+
+  # Vault installation
   configure_vault_directories \
     "$${vault_home_dir}" \
     "$${vault_data_dir}" \
@@ -124,6 +130,7 @@ main() {
   install_vault
   write_vault_systemd_unit
 
+  # Vault configuration
   write_vault_license "$${vault_license_file}"
   write_tls_materials \
     "$${vault_tls_ca_file}" \
@@ -131,9 +138,11 @@ main() {
     "$${vault_tls_key_file}"
   write_vault_config "$${vault_config_file}"
 
+  # Start Vault
   start_vault
   wait_for_vault_api
 
+  # Cluster initialization
   if is_bootstrap_node; then
     initialize_cluster \
       "$${vault_bootstrap_root_token_secret_arn}" \
@@ -172,12 +181,17 @@ main() {
       "$${ssm_pki_ca_cert_name}"
   fi
 
+  # TLS rotation
   reload_vault_tls
   write_pki_ca_cert \
     "$${vault_tls_ca_file}" \
     "$${vault_tls_dir}" \
     "$${ssm_pki_ca_cert_name}"
+
+  # Vault CLI
   write_vault_cli_config "$${vault_fqdn}" "$${vault_tls_ca_file}"
+
+  # Vault Agent
   write_vault_agent_config "$${vault_agent_config_file}"
   write_vault_agent_tls_template "$${vault_agent_server_tls_template_file}"
   write_vault_agent_reload_script "$${vault_agent_server_tls_template_command_file}"
