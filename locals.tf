@@ -81,9 +81,9 @@ locals {
     config_vault_service_override = local.config_vault_service_override
   })
 
-  script_vault_write_license = file("${path.module}/templates/scripts/vault/write-vault-license.sh.tftpl")
+  script_vault_write_license = file("${path.module}/files/scripts/write-vault-license.sh")
 
-  script_vault_write_tls_materials = file("${path.module}/templates/scripts/vault/write-tls-materials.sh.tftpl")
+  script_vault_write_tls_materials = file("${path.module}/files/scripts/write-tls-materials.sh")
 
   script_vault_write_config = templatefile("${path.module}/templates/scripts/vault/write-vault-config.sh.tftpl", {
     config_vault_hcl = local.config_vault_hcl
@@ -97,7 +97,7 @@ locals {
     vault_minimum_quorum_size = var.vault_node_count
   })
 
-  script_vault_configure_snapshots = file("${path.module}/templates/scripts/vault/configure-snapshots.sh.tftpl")
+  script_vault_configure_snapshots = file("${path.module}/files/scripts/configure-snapshots.sh")
 
   script_vault_cluster = templatefile("${path.module}/templates/scripts/vault-initialize-cluster.sh.tftpl", {
     cluster_tag_key                = local.cluster_tag_key
@@ -111,7 +111,9 @@ locals {
     vault_pki_country      = var.vault_pki_country
   })
 
-  script_vault_aws_auth = templatefile("${path.module}/templates/scripts/vault-aws-auth.sh.tftpl", {
+  script_vault_aws_auth = file("${path.module}/files/scripts/vault-aws-auth.sh")
+
+  script_vault_configure_server_role = templatefile("${path.module}/templates/scripts/vault-aws-auth.sh.tftpl", {
     vault_iam_role_arn = aws_iam_role.vault.arn
   })
 

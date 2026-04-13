@@ -72,6 +72,7 @@ resource "aws_launch_template" "vault" {
     script_vault_cluster                = local.script_vault_cluster
     script_vault_pki                    = local.script_vault_pki
     script_vault_aws_auth               = local.script_vault_aws_auth
+    script_vault_configure_server_role  = local.script_vault_configure_server_role
     script_vault_audit                  = local.script_vault_audit
     script_vault_tls                    = local.script_vault_tls
     script_vault_cli                    = local.script_vault_cli
