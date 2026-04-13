@@ -171,24 +171,36 @@ main() {
 
   # Cluster initialization
   if is_bootstrap_node; then
+
+    # Initialize and authenticate
     initialize_cluster \
       "$${vault_bootstrap_root_token_secret_arn}" \
       "$${ssm_cluster_state_name}"
     export VAULT_TOKEN="$(fetch_secret "$${vault_bootstrap_root_token_secret_arn}")"
+
+    # Raft configuration
     configure_autopilot
     write_vault_snapshot_config "$${vault_snapshot_config_file}"
     configure_snapshots "$${vault_snapshot_config_file}"
+
+    # PKI secrets engine
     enable_pki_engine "$${vault_pki_mount_max_ttl}"
     configure_pki_root_ca "$${vault_pki_root_ca_ttl}"
     configure_pki_urls "$${vault_fqdn}"
     configure_pki_vault_server_role "$${vault_fqdn}" "$${vault_pki_vault_server_role_max_ttl}"
     configure_pki_vault_server_role_policy
     write_pki_ca_cert_to_ssm "$${ssm_pki_ca_cert_name}"
+
+    # AWS auth method
     enable_aws_auth
     configure_aws_auth_pki_vault_server_role \
       "$${vault_aws_auth_role_max_ttl}" \
       "$${vault_aws_auth_role_ttl}"
+
+    # Audit logging
     configure_audit_logs "$${vault_audit_log_file}"
+
+    # Signal followers and issue node certificate
     write_pki_state_ready "$${ssm_pki_state_name}"
     issue_node_cert \
       "$${vault_fqdn}" \
@@ -197,7 +209,10 @@ main() {
       "$${vault_tls_key_file}" \
       "$${vault_pki_server_cert_ttl}" \
       "$${ssm_pki_ca_cert_name}"
+
   else
+
+    # Wait for bootstrap and issue node certificate
     join_cluster "$${ssm_cluster_state_name}"
     wait_for_pki_ready "$${ssm_pki_state_name}"
     issue_node_cert \
@@ -207,6 +222,7 @@ main() {
       "$${vault_tls_key_file}" \
       "$${vault_pki_server_cert_ttl}" \
       "$${ssm_pki_ca_cert_name}"
+
   fi
 
   # TLS rotation
