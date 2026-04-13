@@ -5,14 +5,14 @@
 # EC2 Metadata Helpers (IMDSv2)
 # ---------------------------------------------------------------------------
 
-imds_token() {
+get_imds_token() {
   imds_token_ttl="${1}"
   curl -s -X PUT \
     -H "X-aws-ec2-metadata-token-ttl-seconds: ${imds_token_ttl}" \
     "http://169.254.169.254/latest/api/token"
 }
 
-imds_get() {
+get_imds_metadata() {
   path="${1}"
   token="${2}"
   curl -s -H "X-aws-ec2-metadata-token: ${token}" \
@@ -21,20 +21,20 @@ imds_get() {
 
 get_private_ip() {
   imds_token_ttl="${1}"
-  token="$(imds_token "${imds_token_ttl}")"
-  imds_get "local-ipv4" "${token}"
+  token="$(get_imds_token "${imds_token_ttl}")"
+  get_imds_metadata "local-ipv4" "${token}"
 }
 
 get_instance_id() {
   imds_token_ttl="${1}"
-  token="$(imds_token "${imds_token_ttl}")"
-  imds_get "instance-id" "${token}"
+  token="$(get_imds_token "${imds_token_ttl}")"
+  get_imds_metadata "instance-id" "${token}"
 }
 
 get_availability_zone() {
   imds_token_ttl="${1}"
-  token="$(imds_token "${imds_token_ttl}")"
-  imds_get "placement/availability-zone" "${token}"
+  token="$(get_imds_token "${imds_token_ttl}")"
+  get_imds_metadata "placement/availability-zone" "${token}"
 }
 
 # ---------------------------------------------------------------------------

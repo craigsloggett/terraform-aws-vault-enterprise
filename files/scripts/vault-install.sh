@@ -1,7 +1,7 @@
 # shellcheck shell=sh
 # vault-install.sh — Vault binary installation and service lifecycle.
 
-detect_system_architecture() {
+get_system_architecture() {
   machine="$(uname -m)"
   case "${machine}" in
     x86_64) printf 'amd64' ;;
@@ -51,7 +51,7 @@ install_vault() {
 
   log_info "Installing Vault Enterprise ${version}"
 
-  arch="$(detect_system_architecture)"
+  arch="$(get_system_architecture)"
   log_info "Detected architecture: ${arch}"
 
   tmp_dir="$(mktemp -d)"
