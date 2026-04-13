@@ -42,43 +42,65 @@ resource "aws_launch_template" "vault" {
   }
 
   user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
-    region                                = data.aws_region.current.region
-    ebs_raft_device_name                  = local.ebs_raft_device_name
-    ebs_audit_device_name                 = local.ebs_audit_device_name
+    # Environment
+    region     = data.aws_region.current.region
+    vault_fqdn = local.vault_fqdn
+
+    # EBS volumes
+    ebs_raft_device_name  = local.ebs_raft_device_name
+    ebs_audit_device_name = local.ebs_audit_device_name
+
+    # Cluster coordination
     ssm_cluster_state_name                = aws_ssm_parameter.vault_cluster_state.name
     ssm_pki_state_name                    = aws_ssm_parameter.vault_pki_state.name
     ssm_pki_ca_cert_name                  = aws_ssm_parameter.vault_pki_ca_cert.name
-    vault_fqdn                            = local.vault_fqdn
     vault_bootstrap_root_token_secret_arn = aws_secretsmanager_secret.vault_bootstrap_root_token.arn
 
-    script_logging                           = local.script_logging
-    script_ec2_metadata_helpers              = local.script_ec2_metadata_helpers
-    script_secrets_manager_helpers           = local.script_secrets_manager_helpers
-    script_ebs_helpers                       = local.script_ebs_helpers
-    script_system_setup                      = local.script_system_setup
-    script_vault_write_system                = local.script_vault_write_system
-    script_vault_install                     = local.script_vault_install
+    # Shared helpers
+    script_logging                 = local.script_logging
+    script_ec2_metadata_helpers    = local.script_ec2_metadata_helpers
+    script_secrets_manager_helpers = local.script_secrets_manager_helpers
+    script_ebs_helpers             = local.script_ebs_helpers
+    script_system_setup            = local.script_system_setup
+
+    # Vault system setup
+    script_vault_write_system = local.script_vault_write_system
+    script_vault_install      = local.script_vault_install
+
+    # Vault secrets and configuration
     script_vault_get_license                 = local.script_vault_get_license
     script_vault_get_bootstrap_tls_materials = local.script_vault_get_bootstrap_tls_materials
     script_vault_write_systemd_unit          = local.script_vault_write_systemd_unit
     script_vault_write_license               = local.script_vault_write_license
     script_vault_write_tls_materials         = local.script_vault_write_tls_materials
     script_vault_write_config                = local.script_vault_write_config
-    script_vault_write_snapshot_config       = local.script_vault_write_snapshot_config
-    script_vault_configure_autopilot         = local.script_vault_configure_autopilot
-    script_vault_configure_snapshots         = local.script_vault_configure_snapshots
-    script_vault_initialize_cluster          = local.script_vault_initialize_cluster
-    script_vault_configure_pki               = local.script_vault_configure_pki
-    script_vault_configure_aws_auth          = local.script_vault_configure_aws_auth
-    script_vault_configure_audit             = local.script_vault_configure_audit
-    script_vault_configure_tls               = local.script_vault_configure_tls
-    script_vault_write_cli_config            = local.script_vault_write_cli_config
-    script_agent_write_config                = local.script_agent_write_config
-    script_agent_write_tls_template          = local.script_agent_write_tls_template
-    script_agent_write_reload_script         = local.script_agent_write_reload_script
-    script_agent_write_polkit_rules          = local.script_agent_write_polkit_rules
-    script_agent_write_systemd_unit          = local.script_agent_write_systemd_unit
-    script_agent_start                       = local.script_agent_start
+
+    # Cluster initialization and Raft
+    script_vault_initialize_cluster    = local.script_vault_initialize_cluster
+    script_vault_configure_autopilot   = local.script_vault_configure_autopilot
+    script_vault_write_snapshot_config = local.script_vault_write_snapshot_config
+    script_vault_configure_snapshots   = local.script_vault_configure_snapshots
+
+    # PKI secrets engine
+    script_vault_configure_pki = local.script_vault_configure_pki
+
+    # AWS auth and audit
+    script_vault_configure_aws_auth = local.script_vault_configure_aws_auth
+    script_vault_configure_audit    = local.script_vault_configure_audit
+
+    # TLS rotation
+    script_vault_configure_tls = local.script_vault_configure_tls
+
+    # Vault CLI
+    script_vault_write_cli_config = local.script_vault_write_cli_config
+
+    # Vault Agent
+    script_agent_write_config        = local.script_agent_write_config
+    script_agent_write_tls_template  = local.script_agent_write_tls_template
+    script_agent_write_reload_script = local.script_agent_write_reload_script
+    script_agent_write_polkit_rules  = local.script_agent_write_polkit_rules
+    script_agent_write_systemd_unit  = local.script_agent_write_systemd_unit
+    script_agent_start               = local.script_agent_start
   }))
 
   block_device_mappings {
