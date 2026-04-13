@@ -52,7 +52,9 @@ resource "aws_launch_template" "vault" {
     vault_bootstrap_root_token_secret_arn = aws_secretsmanager_secret.vault_bootstrap_root_token.arn
 
     script_logging                  = local.script_logging
-    script_aws_helpers              = local.script_aws_helpers
+    script_ec2_metadata_helpers     = local.script_ec2_metadata_helpers
+    script_secrets_manager_helpers  = local.script_secrets_manager_helpers
+    script_ebs_helpers              = local.script_ebs_helpers
     script_system_setup             = local.script_system_setup
     script_vault_system             = local.script_vault_system
     script_vault_install            = local.script_vault_install

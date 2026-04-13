@@ -46,12 +46,14 @@ locals {
   })
 
   # Cloud-init script fragments — pure shell (no Terraform interpolation)
-  script_logging      = file("${path.module}/files/scripts/logging.sh")
-  script_aws_helpers  = file("${path.module}/files/scripts/aws-helpers.sh")
-  script_system_setup = file("${path.module}/files/scripts/system-setup.sh")
-  script_vault_system = file("${path.module}/files/scripts/vault-system.sh")
-  script_vault_tls    = file("${path.module}/files/scripts/vault-tls.sh")
-  script_vault_cli    = file("${path.module}/files/scripts/vault-cli.sh")
+  script_logging                 = file("${path.module}/files/scripts/logging.sh")
+  script_ec2_metadata_helpers    = file("${path.module}/files/scripts/ec2-metadata-helpers.sh")
+  script_secrets_manager_helpers = file("${path.module}/files/scripts/secrets-manager-helpers.sh")
+  script_ebs_helpers             = file("${path.module}/files/scripts/ebs-helpers.sh")
+  script_system_setup            = file("${path.module}/files/scripts/system-setup.sh")
+  script_vault_system            = file("${path.module}/files/scripts/vault-system.sh")
+  script_vault_tls               = file("${path.module}/files/scripts/vault-tls.sh")
+  script_vault_cli               = file("${path.module}/files/scripts/vault-cli.sh")
 
   # Cloud-init script fragments — need Terraform interpolation
   script_vault_install = templatefile("${path.module}/templates/scripts/vault-install.sh.tftpl", {
