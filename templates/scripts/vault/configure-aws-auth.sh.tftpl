@@ -12,7 +12,7 @@ enable_aws_auth() {
   log_info "AWS auth method enabled"
 }
 
-configure_vault_server_role_policy() {
+configure_pki_vault_server_role_policy() {
   log_info "Writing vault-server policy"
 
   vault policy write vault-server - <<EOF
