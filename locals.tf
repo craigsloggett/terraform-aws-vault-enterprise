@@ -15,21 +15,21 @@ locals {
   ebs_raft_device_name  = "/dev/xvdf"
   ebs_audit_device_name = "/dev/xvdg"
 
-  config_vault_service            = file("${path.module}/files/vault.service")
-  config_vault_service_override   = file("${path.module}/files/vault.service.d-override.conf")
-  config_vault_agent_service      = file("${path.module}/files/vault-agent.service")
-  config_vault_agent_reload_rules = file("${path.module}/files/10-vault-agent-reload.rules")
-  config_reload_vault_server_tls  = file("${path.module}/files/reload-vault-server-tls")
+  config_vault_service            = file("${path.module}/files/cluster/vault.service")
+  config_vault_service_override   = file("${path.module}/files/cluster/vault.service.d-override.conf")
+  config_vault_agent_service      = file("${path.module}/files/agent/vault-agent.service")
+  config_vault_agent_reload_rules = file("${path.module}/files/agent/10-vault-agent-reload.rules")
+  config_reload_vault_server_tls  = file("${path.module}/files/agent/reload-vault-server-tls")
 
-  config_agent_hcl = templatefile("${path.module}/templates/agent.hcl.tftpl", {
+  config_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
     vault_fqdn = local.vault_fqdn
   })
 
-  config_vault_server_tls_ctmpl = templatefile("${path.module}/templates/vault-server-tls.ctmpl.tftpl", {
+  config_vault_server_tls_ctmpl = templatefile("${path.module}/templates/agent/vault-server-tls.ctmpl.tftpl", {
     vault_fqdn = local.vault_fqdn
   })
 
-  config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
+  config_vault_hcl = templatefile("${path.module}/templates/cluster/vault.hcl.tftpl", {
     cluster_name      = var.project_name
     vault_fqdn        = trimsuffix(aws_route53_record.vault.fqdn, ".")
     region            = data.aws_region.current.region
@@ -38,7 +38,7 @@ locals {
     cluster_tag_value = local.cluster_tag_value
   })
 
-  config_snapshot_json = templatefile("${path.module}/templates/snapshot.json.tftpl", {
+  config_snapshot_json = templatefile("${path.module}/templates/cluster/snapshot.json.tftpl", {
     aws_s3_bucket = aws_s3_bucket.vault_snapshots.id
     aws_s3_region = data.aws_region.current.region
     interval      = var.vault_snapshot_interval
