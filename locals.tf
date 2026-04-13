@@ -56,7 +56,6 @@ locals {
   script_vault_write_license       = file("${path.module}/files/scripts/vault/write-license.sh")
   script_vault_write_tls_materials = file("${path.module}/files/scripts/vault/write-tls-materials.sh")
   script_vault_configure_tls       = file("${path.module}/files/scripts/vault/configure-tls.sh")
-  script_vault_configure_aws_auth  = file("${path.module}/files/scripts/vault/configure-aws-auth.sh")
   script_vault_configure_audit     = file("${path.module}/files/scripts/vault/configure-audit.sh")
   script_vault_configure_snapshots = file("${path.module}/files/scripts/vault/configure-snapshots.sh")
   script_vault_write_cli_config    = file("${path.module}/files/scripts/vault/write-cli-config.sh")
@@ -105,7 +104,7 @@ locals {
     vault_pki_country      = var.vault_pki_country
   })
 
-  script_vault_configure_server_role = templatefile("${path.module}/templates/scripts/vault/configure-server-role.sh.tftpl", {
+  script_vault_configure_aws_auth = templatefile("${path.module}/templates/scripts/vault/configure-aws-auth.sh.tftpl", {
     vault_iam_role_arn = aws_iam_role.vault.arn
   })
 
