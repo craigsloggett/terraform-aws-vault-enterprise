@@ -115,8 +115,8 @@ phase_prepare_system() {
 }
 
 phase_prepare_storage() {
-  prepare_disk "${ebs_raft_device_name}" "$${vault_raft_dir}" "vault-raft-data"
-  prepare_disk "${ebs_audit_device_name}" "$${vault_log_dir}" "vault-audit-logs"
+  prepare_disk "${ebs_raft_device_name}" "$${vault_raft_dir}" "vault-raft"
+  prepare_disk "${ebs_audit_device_name}" "$${vault_log_dir}" "vault-audit"
 }
 
 phase_prepare_vault_runtime() {

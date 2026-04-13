@@ -47,6 +47,11 @@ prepare_disk() {
     return 1
   fi
 
+  if [ "${#fs_label}" -gt 12 ]; then
+    log_error "XFS labels must be 12 characters or fewer: ${fs_label}"
+    return 1
+  fi
+
   if ! blkid -p "${device}" >/dev/null 2>&1; then
     log_info "No filesystem on ${device}, formatting as xfs (label=${fs_label})"
     mkfs.xfs -L "${fs_label}" "${device}"
