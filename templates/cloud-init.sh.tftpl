@@ -113,45 +113,116 @@ ${script_vault_cli}
 main() {
   wait_for_network
 
-  private_ip="$(get_private_ip)"
-  instance_id="$(get_instance_id)"
-  availability_zone="$(get_availability_zone)"
+  private_ip="$(get_private_ip "$${imds_endpoint}" "$${imds_token_ttl}")"
+  instance_id="$(get_instance_id "$${imds_endpoint}" "$${imds_token_ttl}")"
+  availability_zone="$(get_availability_zone "$${imds_endpoint}" "$${imds_token_ttl}")"
 
   log_info "Instance $${instance_id} at $${private_ip} in $${availability_zone}"
 
   prepare_system
   configure_time
-  create_vault_user
+  create_vault_user "$${vault_home_dir}"
   prepare_disk "$${ebs_raft_device_name}" "$${ebs_raft_mount}" "vault-data"
   prepare_disk "$${ebs_audit_device_name}" "$${ebs_audit_mount}" "vault-audit"
-  configure_vault_directories
+  configure_vault_directories \
+    "$${vault_home_dir}" \
+    "$${vault_data_dir}" \
+    "$${vault_config_dir}" \
+    "$${vault_log_dir}" \
+    "$${vault_libexec_dir}" \
+    "$${vault_tls_dir}" \
+    "$${vault_raft_dir}" \
+    "$${vault_agent_template_dir}"
   install_vault "$${vault_version}"
   write_vault_systemd_unit
 
-  write_secrets
-  write_vault_config "$${private_ip}" "$${instance_id}" "$${availability_zone}"
+  write_secrets \
+    "$${region}" \
+    "$${vault_license_secret_arn}" \
+    "$${bootstrap_tls_ca_cert_secret_arn}" \
+    "$${bootstrap_tls_server_cert_secret_arn}" \
+    "$${bootstrap_tls_server_key_secret_arn}" \
+    "$${vault_license_file}" \
+    "$${vault_tls_ca_file}" \
+    "$${vault_tls_cert_file}" \
+    "$${vault_tls_key_file}"
+  write_vault_config \
+    "$${vault_config_file}" \
+    "$${private_ip}" \
+    "$${instance_id}" \
+    "$${availability_zone}"
 
   start_services
   wait_for_vault_api
 
-  if is_bootstrap_node; then
-    init_cluster
-    authenticate_vault
+  if is_bootstrap_node \
+    "$${instance_id}" \
+    "$${region}" \
+    "$${cluster_tag_key}" \
+    "$${cluster_tag_value}"; then
+    init_cluster \
+      "$${vault_tls_ca_file}" \
+      "$${region}" \
+      "$${vault_bootstrap_root_token_secret_arn}" \
+      "$${vault_recovery_keys_secret_arn}" \
+      "$${ssm_cluster_state_name}"
+    authenticate_vault \
+      "$${region}" \
+      "$${vault_bootstrap_root_token_secret_arn}" \
+      "$${vault_tls_ca_file}"
     configure_autopilot
-    configure_snapshots
-    configure_pki_engine
-    configure_aws_auth
-    issue_node_cert
+    configure_snapshots "$${vault_snapshot_config_file}"
+    configure_pki_engine \
+      "$${vault_pki_mount_max_ttl}" \
+      "$${cluster_name}" \
+      "$${vault_pki_organization}" \
+      "$${vault_pki_country}" \
+      "$${vault_pki_root_ca_ttl}" \
+      "$${vault_fqdn}" \
+      "$${vault_pki_vault_server_role_max_ttl}" \
+      "$${region}" \
+      "$${ssm_pki_ca_cert_name}"
+    configure_aws_auth \
+      "$${vault_iam_role_arn}" \
+      "$${vault_aws_auth_role_max_ttl}" \
+      "$${vault_aws_auth_role_ttl}" \
+      "$${vault_audit_log_file}" \
+      "$${region}" \
+      "$${ssm_pki_state_name}"
+    issue_node_cert \
+      "$${vault_fqdn}" \
+      "$${region}" \
+      "$${vault_tls_dir}" \
+      "$${vault_tls_ca_file}" \
+      "$${vault_tls_cert_file}" \
+      "$${vault_tls_key_file}" \
+      "$${vault_pki_server_cert_ttl}" \
+      "$${ssm_pki_ca_cert_name}"
   else
-    join_cluster
-    wait_for_pki_ready
-    issue_node_cert
+    join_cluster "$${region}" "$${ssm_cluster_state_name}"
+    wait_for_pki_ready "$${region}" "$${ssm_pki_state_name}"
+    issue_node_cert \
+      "$${vault_fqdn}" \
+      "$${region}" \
+      "$${vault_tls_dir}" \
+      "$${vault_tls_ca_file}" \
+      "$${vault_tls_cert_file}" \
+      "$${vault_tls_key_file}" \
+      "$${vault_pki_server_cert_ttl}" \
+      "$${ssm_pki_ca_cert_name}"
   fi
 
   replace_node_tls
-  cleanup_bootstrap_tls
-  write_vault_cli_config
-  setup_vault_agent
+  cleanup_bootstrap_tls \
+    "$${region}" \
+    "$${vault_tls_ca_file}" \
+    "$${vault_tls_dir}" \
+    "$${ssm_pki_ca_cert_name}"
+  write_vault_cli_config "$${vault_fqdn}" "$${vault_tls_ca_file}"
+  setup_vault_agent \
+    "$${vault_agent_config_file}" \
+    "$${vault_agent_server_tls_template_file}" \
+    "$${vault_agent_server_tls_template_command_file}"
 
   log_info "=== Bootstrap complete ==="
 }

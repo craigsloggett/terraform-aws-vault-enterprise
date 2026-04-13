@@ -1,11 +1,9 @@
-# shellcheck shell=sh disable=SC2154
+# shellcheck shell=sh
 # vault-system.sh — Vault OS user and directory tree setup.
-#
-# Requires globals: vault_home_dir, vault_data_dir, vault_config_dir,
-#   vault_log_dir, vault_libexec_dir, vault_tls_dir, vault_raft_dir,
-#   vault_agent_template_dir
 
 create_vault_user() {
+  vault_home_dir="${1}"
+
   log_info "Creating vault system user"
 
   groupadd --system vault
@@ -13,6 +11,15 @@ create_vault_user() {
 }
 
 configure_vault_directories() {
+  vault_home_dir="${1}"
+  vault_data_dir="${2}"
+  vault_config_dir="${3}"
+  vault_log_dir="${4}"
+  vault_libexec_dir="${5}"
+  vault_tls_dir="${6}"
+  vault_raft_dir="${7}"
+  vault_agent_template_dir="${8}"
+
   log_info "Configuring Vault directory tree"
 
   mkdir -p "${vault_home_dir}"

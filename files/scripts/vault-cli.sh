@@ -1,9 +1,10 @@
-# shellcheck shell=sh disable=SC2154
+# shellcheck shell=sh
 # vault-cli.sh — Vault CLI environment configuration.
-#
-# Requires globals: vault_fqdn, vault_tls_ca_file
 
 write_vault_cli_config() {
+  vault_fqdn="${1}"
+  vault_tls_ca_file="${2}"
+
   log_info "Writing Vault CLI environment to /etc/profile.d/99-vault-cli-config.sh"
 
   cat >/etc/profile.d/99-vault-cli-config.sh <<EOF

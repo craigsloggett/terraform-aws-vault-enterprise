@@ -3,14 +3,6 @@
 # This file is rendered by Terraform templatefile() to embed configuration
 # content. Functions here write config files to disk and configure Vault
 # features that require inline configuration data.
-#
-# Requires globals: vault_license_file, vault_tls_ca_file, vault_tls_cert_file,
-#   vault_tls_key_file, vault_config_file, vault_snapshot_config_file,
-#   vault_agent_config_file, vault_agent_server_tls_template_file,
-#   vault_agent_server_tls_template_command_file,
-#   vault_license_secret_arn, bootstrap_tls_ca_cert_secret_arn,
-#   bootstrap_tls_server_cert_secret_arn, bootstrap_tls_server_key_secret_arn,
-#   region
 
 write_vault_systemd_unit() {
   log_info "Writing Vault systemd unit"
@@ -27,6 +19,16 @@ EOF
 }
 
 write_secrets() {
+  region="$${1}"
+  vault_license_secret_arn="$${2}"
+  bootstrap_tls_ca_cert_secret_arn="$${3}"
+  bootstrap_tls_server_cert_secret_arn="$${4}"
+  bootstrap_tls_server_key_secret_arn="$${5}"
+  vault_license_file="$${6}"
+  vault_tls_ca_file="$${7}"
+  vault_tls_cert_file="$${8}"
+  vault_tls_key_file="$${9}"
+
   log_info "Fetching secrets from AWS Secrets Manager"
 
   vault_license="$(fetch_secret "$${region}" "$${vault_license_secret_arn}")"
@@ -52,9 +54,10 @@ write_secrets() {
 }
 
 write_vault_config() {
-  private_ip="$${1}"
-  instance_id="$${2}"
-  availability_zone="$${3}"
+  vault_config_file="$${1}"
+  private_ip="$${2}"
+  instance_id="$${3}"
+  availability_zone="$${4}"
 
   log_info "Writing Vault configuration (bind=$${private_ip})"
 
@@ -78,6 +81,8 @@ configure_autopilot() {
 }
 
 configure_snapshots() {
+  vault_snapshot_config_file="$${1}"
+
   log_info "Configuring automated Raft snapshots"
 
   cat >"$${vault_snapshot_config_file}" <<'EOF'
@@ -94,6 +99,10 @@ EOF
 }
 
 setup_vault_agent() {
+  vault_agent_config_file="$${1}"
+  vault_agent_server_tls_template_file="$${2}"
+  vault_agent_server_tls_template_command_file="$${3}"
+
   log_info "Setting up Vault Agent for PKI certificate rotation"
 
   cat >"$${vault_agent_config_file}" <<EOF

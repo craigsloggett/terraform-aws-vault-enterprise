@@ -1,11 +1,10 @@
-# shellcheck shell=sh disable=SC2154
+# shellcheck shell=sh
 # vault-tls.sh — Per-node TLS certificate issuance and rotation.
-#
-# Requires globals: region, vault_fqdn, vault_tls_dir, vault_tls_ca_file,
-#   vault_tls_cert_file, vault_tls_key_file, vault_pki_server_cert_ttl,
-#   ssm_pki_state_name, ssm_pki_ca_cert_name
 
 wait_for_pki_ready() {
+  region="${1}"
+  ssm_pki_state_name="${2}"
+
   log_info "Waiting for PKI bootstrap to complete"
 
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -29,6 +28,15 @@ wait_for_pki_ready() {
 }
 
 issue_node_cert() {
+  vault_fqdn="${1}"
+  region="${2}"
+  vault_tls_dir="${3}"
+  vault_tls_ca_file="${4}"
+  vault_tls_cert_file="${5}"
+  vault_tls_key_file="${6}"
+  vault_pki_server_cert_ttl="${7}"
+  ssm_pki_ca_cert_name="${8}"
+
   log_info "Issuing PKI-signed TLS certificate for this node"
 
   # Follower nodes need to fetch the new CA cert from SSM and authenticate
@@ -96,6 +104,11 @@ replace_node_tls() {
 }
 
 cleanup_bootstrap_tls() {
+  region="${1}"
+  vault_tls_ca_file="${2}"
+  vault_tls_dir="${3}"
+  ssm_pki_ca_cert_name="${4}"
+
   log_info "Replacing bootstrap CA cert with PKI CA cert on disk"
 
   # Fetch the PKI CA cert from SSM. This was written by configure_pki_engine()

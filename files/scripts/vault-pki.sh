@@ -1,16 +1,19 @@
-# shellcheck shell=sh disable=SC2154
+# shellcheck shell=sh
 # vault-pki.sh — PKI secrets engine and AWS auth method configuration.
 #
 # These functions run only on the bootstrap node after cluster init.
-#
-# Requires globals: region, vault_fqdn, vault_iam_role_arn,
-#   vault_pki_mount_max_ttl, vault_pki_root_ca_ttl,
-#   vault_pki_vault_server_role_max_ttl, vault_aws_auth_role_max_ttl,
-#   vault_aws_auth_role_ttl, vault_pki_organization, vault_pki_country,
-#   cluster_name, ssm_pki_ca_cert_name, ssm_pki_state_name,
-#   vault_audit_log_file
 
 configure_pki_engine() {
+  vault_pki_mount_max_ttl="${1}"
+  cluster_name="${2}"
+  vault_pki_organization="${3}"
+  vault_pki_country="${4}"
+  vault_pki_root_ca_ttl="${5}"
+  vault_fqdn="${6}"
+  vault_pki_vault_server_role_max_ttl="${7}"
+  region="${8}"
+  ssm_pki_ca_cert_name="${9}"
+
   log_info "Configuring Vault PKI secrets engine"
 
   # Enable the PKI secrets engine if not already enabled.
@@ -65,6 +68,13 @@ configure_pki_engine() {
 }
 
 configure_aws_auth() {
+  vault_iam_role_arn="${1}"
+  vault_aws_auth_role_max_ttl="${2}"
+  vault_aws_auth_role_ttl="${3}"
+  vault_audit_log_file="${4}"
+  region="${5}"
+  ssm_pki_state_name="${6}"
+
   log_info "Configuring Vault AWS auth method"
 
   # Enable the AWS auth method if not already enabled.

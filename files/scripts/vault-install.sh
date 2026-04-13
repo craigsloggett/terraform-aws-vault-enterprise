@@ -4,27 +4,24 @@
 detect_system_architecture() {
   machine="$(uname -m)"
   case "${machine}" in
-    x86_64) arch="amd64" ;;
-    aarch64) arch="arm64" ;;
+    x86_64) printf 'amd64' ;;
+    aarch64) printf 'arm64' ;;
     *)
       log_error "Unsupported architecture: ${machine}"
       return 1
       ;;
   esac
-  log_info "Detected architecture: ${arch}"
 }
 
 download_and_verify_vault() {
   version="${1}"
+  arch="${2}"
+  tmp_dir="${3}"
 
   base_url="https://releases.hashicorp.com/vault/${version}"
   zip_file="vault_${version}_linux_${arch}.zip"
   sums_file="vault_${version}_SHA256SUMS"
   sig_file="vault_${version}_SHA256SUMS.sig"
-
-  # Download release artifacts into an isolated temp directory
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "${tmp_dir}"' EXIT
 
   curl -fsSL -o "${tmp_dir}/${zip_file}" "${base_url}/${zip_file}"
   curl -fsSL -o "${tmp_dir}/${sums_file}" "${base_url}/${sums_file}"
@@ -43,7 +40,6 @@ download_and_verify_vault() {
   log_info "Verifying GPG signature"
   gpg --quiet --verify "${tmp_dir}/${sig_file}" "${tmp_dir}/${sums_file}"
 
-  # SHA256 checksum verification
   log_info "Verifying SHA256 checksum"
   cd "${tmp_dir}" || return 1
   sha256sum -c --ignore-missing "${sums_file}"
@@ -55,11 +51,15 @@ install_vault() {
 
   log_info "Installing Vault Enterprise ${version}"
 
-  detect_system_architecture
-  download_and_verify_vault "${version}"
+  arch="$(detect_system_architecture)"
+  log_info "Detected architecture: ${arch}"
 
-  # Install the binary
-  unzip -o "${tmp_dir}/${zip_file}" -d "${tmp_dir}"
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' EXIT
+
+  download_and_verify_vault "${version}" "${arch}" "${tmp_dir}"
+
+  unzip -o "${tmp_dir}/vault_${version}_linux_${arch}.zip" -d "${tmp_dir}"
   mv "${tmp_dir}/vault" /usr/bin/vault
   chown root:root /usr/bin/vault
   chmod 0755 /usr/bin/vault

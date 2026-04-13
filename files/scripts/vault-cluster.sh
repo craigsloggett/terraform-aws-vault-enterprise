@@ -1,14 +1,13 @@
-# shellcheck shell=sh disable=SC2154
+# shellcheck shell=sh
 # vault-cluster.sh — Cluster initialization, join, and authentication.
-#
-# Requires globals: region, cluster_tag_key, cluster_tag_value,
-#   vault_tls_ca_file, vault_bootstrap_root_token_secret_arn,
-#   vault_recovery_keys_secret_arn, ssm_cluster_state_name
 
 is_bootstrap_node() {
-  log_info "Performing bootstrap node election"
+  instance_id="${1}"
+  region="${2}"
+  cluster_tag_key="${3}"
+  cluster_tag_value="${4}"
 
-  own_id="$(get_instance_id)"
+  log_info "Performing bootstrap node election"
 
   # Fetch all running instance IDs in this cluster by tag.
   all_ids="$(aws ec2 describe-instances \
@@ -23,9 +22,9 @@ is_bootstrap_node() {
   # tr converts tabs to newlines before sort.
   lowest_id="$(printf '%s' "${all_ids}" | tr '\t' '\n' | sort | head -1)"
 
-  log_info "Own instance ID: ${own_id} (lowest in cluster: ${lowest_id})"
+  log_info "Own instance ID: ${instance_id} (lowest in cluster: ${lowest_id})"
 
-  if [ "${own_id}" = "${lowest_id}" ]; then
+  if [ "${instance_id}" = "${lowest_id}" ]; then
     log_info "This node is the bootstrap node"
     return 0
   fi
@@ -35,6 +34,12 @@ is_bootstrap_node() {
 }
 
 init_cluster() {
+  vault_tls_ca_file="${1}"
+  region="${2}"
+  vault_bootstrap_root_token_secret_arn="${3}"
+  vault_recovery_keys_secret_arn="${4}"
+  ssm_cluster_state_name="${5}"
+
   log_info "Initializing Vault cluster"
 
   export VAULT_ADDR="https://127.0.0.1:8200"
@@ -83,6 +88,9 @@ init_cluster() {
 }
 
 join_cluster() {
+  region="${1}"
+  ssm_cluster_state_name="${2}"
+
   log_info "Waiting for cluster initialization to complete"
 
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -105,6 +113,10 @@ join_cluster() {
 }
 
 authenticate_vault() {
+  region="${1}"
+  vault_bootstrap_root_token_secret_arn="${2}"
+  vault_tls_ca_file="${3}"
+
   log_info "Authenticating with Vault using bootstrap root token"
 
   root_token="$(fetch_secret "${region}" "${vault_bootstrap_root_token_secret_arn}")"
