@@ -48,7 +48,6 @@ ebs_audit_device_name="${ebs_audit_device_name}"
 ebs_audit_mount="$${vault_log_dir}"
 
 # AWS
-region="${region}"
 
 # AWS Secrets Manager (ARNs)
 vault_license_secret_arn="${vault_license_secret_arn}"
@@ -118,7 +117,7 @@ main() {
   instance_id="$(get_instance_id)"
   availability_zone="$(get_availability_zone)"
 
-  export AWS_REGION="$${region}"
+  export AWS_REGION="${region}"
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TLS_SERVER_NAME="$${vault_fqdn}"
   export VAULT_CACERT="$${vault_tls_ca_file}"
