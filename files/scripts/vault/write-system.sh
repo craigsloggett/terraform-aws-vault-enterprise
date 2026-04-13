@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# vault-system.sh — Vault OS user and directory tree setup.
+# write-system.sh — Vault OS user and directory tree setup.
 
 create_vault_user() {
   vault_home_dir="${1}"

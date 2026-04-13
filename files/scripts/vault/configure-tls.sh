@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# vault-tls.sh — Per-node TLS certificate issuance and rotation.
+# configure-tls.sh — Per-node TLS certificate issuance and rotation.
 
 wait_for_pki_ready() {
   ssm_pki_state_name="${1}"

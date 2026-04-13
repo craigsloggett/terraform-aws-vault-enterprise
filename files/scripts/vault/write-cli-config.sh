@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# vault-cli.sh — Vault CLI environment configuration.
+# write-cli-config.sh — Vault CLI environment configuration.
 
 write_vault_cli_config() {
   vault_fqdn="${1}"

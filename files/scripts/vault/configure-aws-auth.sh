@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# vault-aws-auth.sh — AWS auth method configuration.
+# configure-aws-auth.sh — AWS auth method configuration.
 #
 # These functions run only on the bootstrap node after cluster init.
 

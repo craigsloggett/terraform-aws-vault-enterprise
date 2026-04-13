@@ -51,12 +51,18 @@ locals {
   script_secrets_manager_helpers = file("${path.module}/files/scripts/secrets-manager-helpers.sh")
   script_ebs_helpers             = file("${path.module}/files/scripts/ebs-helpers.sh")
   script_system_setup            = file("${path.module}/files/scripts/system-setup.sh")
-  script_vault_system            = file("${path.module}/files/scripts/vault-system.sh")
-  script_vault_tls               = file("${path.module}/files/scripts/vault-tls.sh")
-  script_vault_cli               = file("${path.module}/files/scripts/vault-cli.sh")
+  # Vault scripts — pure shell
+  script_vault_write_system        = file("${path.module}/files/scripts/vault/write-system.sh")
+  script_vault_write_license       = file("${path.module}/files/scripts/vault/write-license.sh")
+  script_vault_write_tls_materials = file("${path.module}/files/scripts/vault/write-tls-materials.sh")
+  script_vault_configure_tls       = file("${path.module}/files/scripts/vault/configure-tls.sh")
+  script_vault_configure_aws_auth  = file("${path.module}/files/scripts/vault/configure-aws-auth.sh")
+  script_vault_configure_audit     = file("${path.module}/files/scripts/vault/configure-audit.sh")
+  script_vault_configure_snapshots = file("${path.module}/files/scripts/vault/configure-snapshots.sh")
+  script_vault_write_cli_config    = file("${path.module}/files/scripts/vault/write-cli-config.sh")
 
-  # Cloud-init script fragments — need Terraform interpolation
-  script_vault_install = templatefile("${path.module}/templates/scripts/vault-install.sh.tftpl", {
+  # Vault scripts — need Terraform interpolation
+  script_vault_install = templatefile("${path.module}/templates/scripts/vault/install.sh.tftpl", {
     vault_version = var.vault_version
   })
 
@@ -76,20 +82,16 @@ locals {
     bootstrap_tls_server_key_secret_arn = aws_secretsmanager_secret.vault_bootstrap_server_key.arn
   })
 
-  script_vault_write_systemd_unit = templatefile("${path.module}/templates/scripts/vault/write-vault-systemd-unit.sh.tftpl", {
+  script_vault_write_systemd_unit = templatefile("${path.module}/templates/scripts/vault/write-systemd-unit.sh.tftpl", {
     config_vault_service          = local.config_vault_service
     config_vault_service_override = local.config_vault_service_override
   })
 
-  script_vault_write_license = file("${path.module}/files/scripts/write-vault-license.sh")
-
-  script_vault_write_tls_materials = file("${path.module}/files/scripts/write-tls-materials.sh")
-
-  script_vault_write_config = templatefile("${path.module}/templates/scripts/vault/write-vault-config.sh.tftpl", {
+  script_vault_write_config = templatefile("${path.module}/templates/scripts/vault/write-config.sh.tftpl", {
     config_vault_hcl = local.config_vault_hcl
   })
 
-  script_vault_write_snapshot_config = templatefile("${path.module}/templates/scripts/vault/write-vault-snapshot-config.sh.tftpl", {
+  script_vault_write_snapshot_config = templatefile("${path.module}/templates/scripts/vault/write-snapshot-config.sh.tftpl", {
     config_vault_snapshot_json = local.config_vault_snapshot_json
   })
 
@@ -97,49 +99,45 @@ locals {
     vault_minimum_quorum_size = var.vault_node_count
   })
 
-  script_vault_configure_snapshots = file("${path.module}/files/scripts/vault-snapshots.sh")
-
-  script_vault_cluster = templatefile("${path.module}/templates/scripts/vault-initialize-cluster.sh.tftpl", {
+  script_vault_initialize_cluster = templatefile("${path.module}/templates/scripts/vault/initialize-cluster.sh.tftpl", {
     cluster_tag_key                = local.cluster_tag_key
     cluster_tag_value              = local.cluster_tag_value
     vault_recovery_keys_secret_arn = aws_secretsmanager_secret.vault_recovery_keys.arn
   })
 
-  script_vault_pki = templatefile("${path.module}/templates/scripts/vault-pki.sh.tftpl", {
+  script_vault_configure_pki = templatefile("${path.module}/templates/scripts/vault/configure-pki.sh.tftpl", {
     cluster_name           = title(var.project_name)
     vault_pki_organization = var.vault_pki_organization
     vault_pki_country      = var.vault_pki_country
   })
 
-  script_vault_aws_auth = file("${path.module}/files/scripts/vault-aws-auth.sh")
-
-  script_vault_configure_server_role = templatefile("${path.module}/templates/scripts/vault-aws-auth.sh.tftpl", {
+  script_vault_configure_server_role = templatefile("${path.module}/templates/scripts/vault/configure-server-role.sh.tftpl", {
     vault_iam_role_arn = aws_iam_role.vault.arn
   })
 
-  script_vault_audit = file("${path.module}/files/scripts/vault-audit.sh")
-
-  script_agent_write_config = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-config.sh.tftpl", {
+  # Agent scripts — need Terraform interpolation
+  script_agent_write_config = templatefile("${path.module}/templates/scripts/agent/write-config.sh.tftpl", {
     config_agent_hcl = local.config_agent_hcl
   })
 
-  script_agent_write_tls_template = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-tls-template.sh.tftpl", {
+  script_agent_write_tls_template = templatefile("${path.module}/templates/scripts/agent/write-tls-template.sh.tftpl", {
     config_agent_server_tls_ctmpl = local.config_agent_server_tls_ctmpl
   })
 
-  script_agent_write_reload_script = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-reload-script.sh.tftpl", {
+  script_agent_write_reload_script = templatefile("${path.module}/templates/scripts/agent/write-reload-script.sh.tftpl", {
     config_agent_reload_vault_server_tls = local.config_agent_reload_vault_server_tls
   })
 
-  script_agent_write_polkit_rules = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-polkit-rules.sh.tftpl", {
+  script_agent_write_polkit_rules = templatefile("${path.module}/templates/scripts/agent/write-polkit-rules.sh.tftpl", {
     config_agent_reload_rules = local.config_agent_reload_rules
   })
 
-  script_agent_write_systemd_unit = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-systemd-unit.sh.tftpl", {
+  script_agent_write_systemd_unit = templatefile("${path.module}/templates/scripts/agent/write-systemd-unit.sh.tftpl", {
     config_agent_service = local.config_agent_service
   })
 
-  script_agent_start = file("${path.module}/files/scripts/start-vault-agent.sh")
+  # Agent scripts — pure shell
+  script_agent_start = file("${path.module}/files/scripts/agent/start.sh")
 
   vpc = var.existing_vpc != null ? {
     id                 = var.existing_vpc.vpc_id

@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# start-vault-agent.sh — Start the Vault Agent systemd service.
+# start.sh — Start the Vault Agent systemd service.
 
 start_vault_agent() {
   log_info "Starting Vault Agent"

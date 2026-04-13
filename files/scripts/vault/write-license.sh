@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# write-vault-license.sh — Write the Vault Enterprise license to disk.
+# write-license.sh — Write the Vault Enterprise license to disk.
 
 write_vault_license() {
   vault_license_file="${1}"

@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# vault-audit.sh — Vault audit device configuration.
+# configure-audit.sh — Vault audit device configuration.
 #
 # This function runs only on the bootstrap node after cluster init.
 
