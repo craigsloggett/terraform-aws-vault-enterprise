@@ -43,8 +43,9 @@ EOF
 }
 
 write_vault_license() {
-  vault_license="$${1}"
-  vault_license_file="$${2}"
+  vault_license_file="$${1}"
+
+  vault_license="$(get_license)"
 
   log_info "Writing the Vault license"
   printf '%s\n' "$${vault_license}" >"$${vault_license_file}"
@@ -53,12 +54,13 @@ write_vault_license() {
 }
 
 write_tls_materials() {
-  ca_cert="$${1}"
-  server_cert="$${2}"
-  server_key="$${3}"
-  vault_tls_ca_file="$${4}"
-  vault_tls_cert_file="$${5}"
-  vault_tls_key_file="$${6}"
+  vault_tls_ca_file="$${1}"
+  vault_tls_cert_file="$${2}"
+  vault_tls_key_file="$${3}"
+
+  ca_cert="$(get_bootstrap_root_ca)"
+  server_cert="$(get_bootstrap_tls_cert)"
+  server_key="$(get_bootstrap_tls_key)"
 
   log_info "Writing bootstrap TLS certificates"
   printf '%s\n' "$${ca_cert}" >"$${vault_tls_ca_file}"
@@ -72,9 +74,10 @@ write_tls_materials() {
 
 write_vault_config() {
   vault_config_file="$${1}"
-  private_ip="$${2}"
-  instance_id="$${3}"
-  availability_zone="$${4}"
+
+  private_ip="$(get_private_ip)"
+  instance_id="$(get_instance_id)"
+  availability_zone="$(get_availability_zone)"
 
   log_info "Writing Vault configuration (bind=$${private_ip})"
 

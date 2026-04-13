@@ -95,10 +95,6 @@ ${script_agent_write_config_files}
 main() {
   wait_for_network
 
-  private_ip="$(get_private_ip)"
-  instance_id="$(get_instance_id)"
-  availability_zone="$(get_availability_zone)"
-
   export AWS_REGION="${region}"
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TLS_SERVER_NAME="$${vault_fqdn}"
@@ -121,28 +117,17 @@ main() {
   install_vault
   write_vault_systemd_unit
 
-  vault_license="$(get_license)"
-  ca_cert="$(get_bootstrap_root_ca)"
-  server_cert="$(get_bootstrap_tls_cert)"
-  server_key="$(get_bootstrap_tls_key)"
-  write_vault_license "$${vault_license}" "$${vault_license_file}"
+  write_vault_license "$${vault_license_file}"
   write_tls_materials \
-    "$${ca_cert}" \
-    "$${server_cert}" \
-    "$${server_key}" \
     "$${vault_tls_ca_file}" \
     "$${vault_tls_cert_file}" \
     "$${vault_tls_key_file}"
-  write_vault_config \
-    "$${vault_config_file}" \
-    "$${private_ip}" \
-    "$${instance_id}" \
-    "$${availability_zone}"
+  write_vault_config "$${vault_config_file}"
 
   start_vault
   wait_for_vault_api
 
-  if is_bootstrap_node "$${instance_id}"; then
+  if is_bootstrap_node; then
     initialize_cluster \
       "$${vault_bootstrap_root_token_secret_arn}" \
       "$${ssm_cluster_state_name}"
