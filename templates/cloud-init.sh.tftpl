@@ -118,13 +118,13 @@ main() {
     "$${vault_tls_dir}" \
     "$${vault_raft_dir}" \
     "$${vault_agent_template_dir}"
-  install_vault "${vault_version}"
+  install_vault
   write_vault_systemd_unit
 
-  vault_license="$(get_license "${vault_license_secret_arn}")"
-  ca_cert="$(get_bootstrap_root_ca "${bootstrap_tls_ca_cert_secret_arn}")"
-  server_cert="$(get_bootstrap_tls_cert "${bootstrap_tls_server_cert_secret_arn}")"
-  server_key="$(get_bootstrap_tls_key "${bootstrap_tls_server_key_secret_arn}")"
+  vault_license="$(get_license)"
+  ca_cert="$(get_bootstrap_root_ca)"
+  server_cert="$(get_bootstrap_tls_cert)"
+  server_key="$(get_bootstrap_tls_key)"
   write_vault_license "$${vault_license}" "$${vault_license_file}"
   write_tls_materials \
     "$${ca_cert}" \
@@ -142,13 +142,9 @@ main() {
   start_vault
   wait_for_vault_api
 
-  if is_bootstrap_node \
-    "$${instance_id}" \
-    "${cluster_tag_key}" \
-    "${cluster_tag_value}"; then
+  if is_bootstrap_node "$${instance_id}"; then
     initialize_cluster \
       "$${vault_bootstrap_root_token_secret_arn}" \
-      "${vault_recovery_keys_secret_arn}" \
       "$${ssm_cluster_state_name}"
     export VAULT_TOKEN="$(fetch_secret "$${vault_bootstrap_root_token_secret_arn}")"
     configure_autopilot
@@ -157,14 +153,10 @@ main() {
     configure_pki_engine \
       "$${vault_fqdn}" \
       "$${vault_pki_mount_max_ttl}" \
-      "${cluster_name}" \
-      "${vault_pki_organization}" \
-      "${vault_pki_country}" \
       "$${vault_pki_root_ca_ttl}" \
       "$${vault_pki_vault_server_role_max_ttl}" \
       "$${ssm_pki_ca_cert_name}"
     configure_aws_auth \
-      "${vault_iam_role_arn}" \
       "$${vault_aws_auth_role_max_ttl}" \
       "$${vault_aws_auth_role_ttl}" \
       "$${vault_audit_log_file}" \
