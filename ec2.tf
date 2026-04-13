@@ -61,27 +61,21 @@ resource "aws_launch_template" "vault" {
     vault_iam_role_arn                    = aws_iam_role.vault.arn
     vault_bootstrap_root_token_secret_arn = aws_secretsmanager_secret.vault_bootstrap_root_token.arn
     vault_recovery_keys_secret_arn        = aws_secretsmanager_secret.vault_recovery_keys.arn
-    vault_minimum_quorum_size             = var.vault_node_count
     vault_pki_organization                = var.vault_pki_organization
     vault_pki_country                     = var.vault_pki_country
 
-    config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
-      cluster_name      = var.project_name
-      vault_fqdn        = trimsuffix(aws_route53_record.vault.fqdn, ".")
-      region            = data.aws_region.current.region
-      kms_key_alias     = aws_kms_alias.vault.name
-      cluster_tag_key   = local.cluster_tag_key
-      cluster_tag_value = local.cluster_tag_value
-    })
-
-    config_vault_service            = local.config_vault_service
-    config_vault_service_override   = local.config_vault_service_override
-    config_vault_agent_service      = local.config_vault_agent_service
-    config_agent_hcl                = local.config_agent_hcl
-    config_vault_agent_reload_rules = local.config_vault_agent_reload_rules
-    config_reload_vault_server_tls  = local.config_reload_vault_server_tls
-    config_vault_server_tls_ctmpl   = local.config_vault_server_tls_ctmpl
-    config_snapshot_json            = local.config_snapshot_json
+    script_logging            = local.script_logging
+    script_ec2_metadata       = local.script_ec2_metadata
+    script_aws_helpers        = local.script_aws_helpers
+    script_system_setup       = local.script_system_setup
+    script_ebs                = local.script_ebs
+    script_vault_system       = local.script_vault_system
+    script_vault_install      = local.script_vault_install
+    script_vault_config_files = local.script_vault_config_files
+    script_vault_cluster      = local.script_vault_cluster
+    script_vault_pki          = local.script_vault_pki
+    script_vault_tls          = local.script_vault_tls
+    script_vault_cli          = local.script_vault_cli
   }))
 
   block_device_mappings {

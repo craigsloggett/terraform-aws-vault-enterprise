@@ -1,0 +1,130 @@
+# vault-config-files.sh — Configuration file writers and post-init setup.
+#
+# This file is rendered by Terraform templatefile() to embed configuration
+# content. Functions here write config files to disk and configure Vault
+# features that require inline configuration data.
+#
+# Requires globals: vault_license_file, vault_tls_ca_file, vault_tls_cert_file,
+#   vault_tls_key_file, vault_config_file, vault_snapshot_config_file,
+#   vault_agent_config_file, vault_agent_server_tls_template_file,
+#   vault_agent_server_tls_template_command_file,
+#   vault_license_secret_arn, bootstrap_tls_ca_cert_secret_arn,
+#   bootstrap_tls_server_cert_secret_arn, bootstrap_tls_server_key_secret_arn,
+#   region
+
+write_vault_systemd_unit() {
+  log_info "Writing Vault systemd unit"
+
+  cat >/etc/systemd/system/vault.service <<EOF
+${config_vault_service}
+EOF
+
+  mkdir -p /etc/systemd/system/vault.service.d
+  cat >/etc/systemd/system/vault.service.d/override.conf <<'EOF'
+${config_vault_service_override}
+EOF
+  chmod 0600 /etc/systemd/system/vault.service.d/override.conf
+}
+
+write_secrets() {
+  log_info "Fetching secrets from AWS Secrets Manager"
+
+  vault_license="$$(fetch_secret "$${region}" "$${vault_license_secret_arn}")"
+  ca_cert="$$(fetch_secret "$${region}" "$${bootstrap_tls_ca_cert_secret_arn}")"
+  server_cert="$$(fetch_secret "$${region}" "$${bootstrap_tls_server_cert_secret_arn}")"
+  server_key="$$(fetch_secret "$${region}" "$${bootstrap_tls_server_key_secret_arn}")"
+
+  # Write the license file
+  log_info "Writing the Vault license"
+  printf '%s\n' "$${vault_license}" >"$${vault_license_file}"
+  chown vault:vault "$${vault_license_file}"
+  chmod 0640 "$${vault_license_file}"
+
+  # Write TLS certificates
+  log_info "Writing bootstrap TLS certificates"
+  printf '%s\n' "$${ca_cert}" >"$${vault_tls_ca_file}"
+  printf '%s\n' "$${server_cert}" >"$${vault_tls_cert_file}"
+  printf '%s\n' "$${server_key}" >"$${vault_tls_key_file}"
+
+  chown vault:vault "$${vault_tls_ca_file}" "$${vault_tls_cert_file}" "$${vault_tls_key_file}"
+  chmod 0640 "$${vault_tls_cert_file}" "$${vault_tls_key_file}"
+  chmod 0644 "$${vault_tls_ca_file}"
+}
+
+write_vault_config() {
+  private_ip="$${1}"
+  instance_id="$${2}"
+  availability_zone="$${3}"
+
+  log_info "Writing Vault configuration (bind=$${private_ip})"
+
+  cat >"$${vault_config_file}" <<EOF
+${config_vault_hcl}
+EOF
+
+  chown vault:vault "$${vault_config_file}"
+  chmod 0640 "$${vault_config_file}"
+}
+
+configure_autopilot() {
+  log_info "Configuring Raft Autopilot"
+
+  vault operator raft autopilot set-config \
+    -cleanup-dead-servers=true \
+    -dead-server-last-contact-threshold=10m \
+    -min-quorum=${vault_minimum_quorum_size}
+
+  log_info "Raft Autopilot configured"
+}
+
+configure_snapshots() {
+  log_info "Configuring automated Raft snapshots"
+
+  cat >"$${vault_snapshot_config_file}" <<'EOF'
+${config_snapshot_json}
+EOF
+
+  chown vault:vault "$${vault_snapshot_config_file}"
+  chmod 0640 "$${vault_snapshot_config_file}"
+
+  vault write sys/storage/raft/snapshot-auto/config/hourly \
+    @"$${vault_snapshot_config_file}"
+
+  log_info "Automated Raft snapshots configured"
+}
+
+setup_vault_agent() {
+  log_info "Setting up Vault Agent for PKI certificate rotation"
+
+  cat >"$${vault_agent_config_file}" <<EOF
+${config_agent_hcl}
+EOF
+
+  chown vault:vault "$${vault_agent_config_file}"
+  chmod 0644 "$${vault_agent_config_file}"
+
+  cat >"$${vault_agent_server_tls_template_file}" <<EOF
+${config_vault_server_tls_ctmpl}
+EOF
+  chown vault:vault "$${vault_agent_server_tls_template_file}"
+  chmod 0644 "$${vault_agent_server_tls_template_file}"
+
+  cat >"$${vault_agent_server_tls_template_command_file}" <<EOF
+${config_reload_vault_server_tls}
+EOF
+  chown root:root "$${vault_agent_server_tls_template_command_file}"
+  chmod 0755 "$${vault_agent_server_tls_template_command_file}"
+
+  cat >/etc/polkit-1/rules.d/10-vault-agent-reload.rules <<'EOF'
+${config_vault_agent_reload_rules}
+EOF
+
+  cat >/etc/systemd/system/vault-agent.service <<EOF
+${config_vault_agent_service}
+EOF
+
+  systemctl daemon-reload
+  systemctl enable --now vault-agent
+
+  log_info "Vault Agent started"
+}

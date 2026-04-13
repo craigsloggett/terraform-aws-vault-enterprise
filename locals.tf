@@ -29,11 +29,47 @@ locals {
     vault_fqdn = local.vault_fqdn
   })
 
+  config_vault_hcl = templatefile("${path.module}/templates/vault.hcl.tftpl", {
+    cluster_name      = var.project_name
+    vault_fqdn        = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    region            = data.aws_region.current.region
+    kms_key_alias     = aws_kms_alias.vault.name
+    cluster_tag_key   = local.cluster_tag_key
+    cluster_tag_value = local.cluster_tag_value
+  })
+
   config_snapshot_json = templatefile("${path.module}/templates/snapshot.json.tftpl", {
     aws_s3_bucket = aws_s3_bucket.vault_snapshots.id
     aws_s3_region = data.aws_region.current.region
     interval      = var.vault_snapshot_interval
     retain        = var.vault_snapshot_retain
+  })
+
+  # Cloud-init script fragments — pure shell (no Terraform interpolation)
+  script_logging       = file("${path.module}/files/scripts/logging.sh")
+  script_ec2_metadata  = file("${path.module}/files/scripts/ec2-metadata.sh")
+  script_aws_helpers   = file("${path.module}/files/scripts/aws-helpers.sh")
+  script_system_setup  = file("${path.module}/files/scripts/system-setup.sh")
+  script_ebs           = file("${path.module}/files/scripts/ebs.sh")
+  script_vault_system  = file("${path.module}/files/scripts/vault-system.sh")
+  script_vault_install = file("${path.module}/files/scripts/vault-install.sh")
+  script_vault_cluster = file("${path.module}/files/scripts/vault-cluster.sh")
+  script_vault_pki     = file("${path.module}/files/scripts/vault-pki.sh")
+  script_vault_tls     = file("${path.module}/files/scripts/vault-tls.sh")
+  script_vault_cli     = file("${path.module}/files/scripts/vault-cli.sh")
+
+  # Cloud-init script fragment — needs Terraform interpolation for config content
+  script_vault_config_files = templatefile("${path.module}/templates/scripts/vault-config-files.sh.tftpl", {
+    config_vault_service            = local.config_vault_service
+    config_vault_service_override   = local.config_vault_service_override
+    config_vault_hcl                = local.config_vault_hcl
+    config_snapshot_json            = local.config_snapshot_json
+    config_agent_hcl                = local.config_agent_hcl
+    config_vault_server_tls_ctmpl   = local.config_vault_server_tls_ctmpl
+    config_reload_vault_server_tls  = local.config_reload_vault_server_tls
+    config_vault_agent_reload_rules = local.config_vault_agent_reload_rules
+    config_vault_agent_service      = local.config_vault_agent_service
+    vault_minimum_quorum_size       = var.vault_node_count
   })
 
   vpc = var.existing_vpc != null ? {
