@@ -104,8 +104,10 @@ main() {
   prepare_system
   configure_time
   create_vault_user "$${vault_home_dir}"
-  prepare_disk "${ebs_raft_device_name}" "$${vault_raft_dir}" "vault-data"
-  prepare_disk "${ebs_audit_device_name}" "$${vault_log_dir}" "vault-audit"
+  raft_device="$(get_ebs_device "${ebs_raft_device_name}")"
+  audit_device="$(get_ebs_device "${ebs_audit_device_name}")"
+  write_disk "$${raft_device}" "$${vault_raft_dir}" "vault-data"
+  write_disk "$${audit_device}" "$${vault_log_dir}" "vault-audit"
   configure_vault_directories \
     "$${vault_home_dir}" \
     "$${vault_data_dir}" \
