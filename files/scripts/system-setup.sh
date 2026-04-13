@@ -24,7 +24,7 @@ prepare_system() {
 
   apt-get -yq update >/dev/null
   apt-get -yq install \
-    awscli jq unzip nvme-cli amazon-ec2-utils chrony >/dev/null
+    awscli gnupg jq unzip nvme-cli amazon-ec2-utils chrony >/dev/null
 }
 
 configure_time() {

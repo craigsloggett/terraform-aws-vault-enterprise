@@ -1,14 +1,7 @@
 # shellcheck shell=sh
 # vault-install.sh — Vault binary installation and service lifecycle.
 
-install_vault() {
-  version="${1}"
-
-  log_info "Installing Vault Enterprise ${version}"
-
-  apt-get -yq install gnupg >/dev/null
-
-  # Detect architecture
+detect_system_architecture() {
   machine="$(uname -m)"
   case "${machine}" in
     x86_64) arch="amd64" ;;
@@ -18,7 +11,11 @@ install_vault() {
       return 1
       ;;
   esac
-  log_info "Detected architecture: ${arch}" >&2
+  log_info "Detected architecture: ${arch}"
+}
+
+download_and_verify_vault() {
+  version="${1}"
 
   base_url="https://releases.hashicorp.com/vault/${version}"
   zip_file="vault_${version}_linux_${arch}.zip"
@@ -51,6 +48,15 @@ install_vault() {
   cd "${tmp_dir}" || return 1
   sha256sum -c --ignore-missing "${sums_file}"
   cd / || return 1
+}
+
+install_vault() {
+  version="${1}"
+
+  log_info "Installing Vault Enterprise ${version}"
+
+  detect_system_architecture
+  download_and_verify_vault "${version}"
 
   # Install the binary
   unzip -o "${tmp_dir}/${zip_file}" -d "${tmp_dir}"
