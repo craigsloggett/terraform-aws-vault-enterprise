@@ -1,0 +1,7 @@
+write_vault_agent_polkit_rules() {
+  log_info "Writing Vault Agent polkit rules"
+
+  cat >/etc/polkit-1/rules.d/10-vault-agent-reload.rules <<'EOF'
+${config_agent_reload_rules}
+EOF
+}

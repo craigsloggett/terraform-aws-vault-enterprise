@@ -75,7 +75,27 @@ ${script_vault_system}
 
 ${script_vault_install}
 
-${script_vault_write_config_files}
+${script_vault_get_license}
+
+${script_vault_get_bootstrap_root_ca}
+
+${script_vault_get_bootstrap_tls_cert}
+
+${script_vault_get_bootstrap_tls_key}
+
+${script_vault_write_systemd_unit}
+
+${script_vault_write_license}
+
+${script_vault_write_tls_materials}
+
+${script_vault_write_config}
+
+${script_vault_write_snapshot_config}
+
+${script_vault_configure_autopilot}
+
+${script_vault_configure_snapshots}
 
 ${script_vault_cluster}
 
@@ -87,7 +107,17 @@ ${script_vault_tls}
 
 ${script_vault_cli}
 
-${script_agent_write_config_files}
+${script_agent_write_config}
+
+${script_agent_write_tls_template}
+
+${script_agent_write_reload_script}
+
+${script_agent_write_polkit_rules}
+
+${script_agent_write_systemd_unit}
+
+${script_agent_start}
 
 # ---------------------------------------------------------------------------
 # Entrypoint

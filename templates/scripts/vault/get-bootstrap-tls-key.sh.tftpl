@@ -1,0 +1,5 @@
+get_bootstrap_tls_key() {
+  bootstrap_tls_server_key_secret_arn="${bootstrap_tls_server_key_secret_arn}"
+
+  fetch_secret "$${bootstrap_tls_server_key_secret_arn}"
+}

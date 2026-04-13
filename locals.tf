@@ -60,17 +60,44 @@ locals {
     vault_version = var.vault_version
   })
 
-  script_vault_write_config_files = templatefile("${path.module}/templates/scripts/vault/write-config-files.sh.tftpl", {
-    config_vault_service                 = local.config_vault_service
-    config_vault_service_override        = local.config_vault_service_override
-    config_vault_hcl                     = local.config_vault_hcl
-    config_vault_snapshot_json           = local.config_vault_snapshot_json
-    vault_minimum_quorum_size            = var.vault_node_count
-    vault_license_secret_arn             = aws_secretsmanager_secret.vault_license.arn
-    bootstrap_tls_ca_cert_secret_arn     = aws_secretsmanager_secret.vault_bootstrap_ca_cert.arn
-    bootstrap_tls_server_cert_secret_arn = aws_secretsmanager_secret.vault_bootstrap_server_cert.arn
-    bootstrap_tls_server_key_secret_arn  = aws_secretsmanager_secret.vault_bootstrap_server_key.arn
+  script_vault_get_license = templatefile("${path.module}/templates/scripts/vault/get-license.sh.tftpl", {
+    vault_license_secret_arn = aws_secretsmanager_secret.vault_license.arn
   })
+
+  script_vault_get_bootstrap_root_ca = templatefile("${path.module}/templates/scripts/vault/get-bootstrap-root-ca.sh.tftpl", {
+    bootstrap_tls_ca_cert_secret_arn = aws_secretsmanager_secret.vault_bootstrap_ca_cert.arn
+  })
+
+  script_vault_get_bootstrap_tls_cert = templatefile("${path.module}/templates/scripts/vault/get-bootstrap-tls-cert.sh.tftpl", {
+    bootstrap_tls_server_cert_secret_arn = aws_secretsmanager_secret.vault_bootstrap_server_cert.arn
+  })
+
+  script_vault_get_bootstrap_tls_key = templatefile("${path.module}/templates/scripts/vault/get-bootstrap-tls-key.sh.tftpl", {
+    bootstrap_tls_server_key_secret_arn = aws_secretsmanager_secret.vault_bootstrap_server_key.arn
+  })
+
+  script_vault_write_systemd_unit = templatefile("${path.module}/templates/scripts/vault/write-vault-systemd-unit.sh.tftpl", {
+    config_vault_service          = local.config_vault_service
+    config_vault_service_override = local.config_vault_service_override
+  })
+
+  script_vault_write_license = file("${path.module}/templates/scripts/vault/write-vault-license.sh.tftpl")
+
+  script_vault_write_tls_materials = file("${path.module}/templates/scripts/vault/write-tls-materials.sh.tftpl")
+
+  script_vault_write_config = templatefile("${path.module}/templates/scripts/vault/write-vault-config.sh.tftpl", {
+    config_vault_hcl = local.config_vault_hcl
+  })
+
+  script_vault_write_snapshot_config = templatefile("${path.module}/templates/scripts/vault/write-vault-snapshot-config.sh.tftpl", {
+    config_vault_snapshot_json = local.config_vault_snapshot_json
+  })
+
+  script_vault_configure_autopilot = templatefile("${path.module}/templates/scripts/vault/configure-autopilot.sh.tftpl", {
+    vault_minimum_quorum_size = var.vault_node_count
+  })
+
+  script_vault_configure_snapshots = file("${path.module}/templates/scripts/vault/configure-snapshots.sh.tftpl")
 
   script_vault_cluster = templatefile("${path.module}/templates/scripts/vault-initialize-cluster.sh.tftpl", {
     cluster_tag_key                = local.cluster_tag_key
@@ -88,13 +115,27 @@ locals {
     vault_iam_role_arn = aws_iam_role.vault.arn
   })
 
-  script_agent_write_config_files = templatefile("${path.module}/templates/scripts/agent/write-config-files.sh.tftpl", {
-    config_agent_hcl                     = local.config_agent_hcl
-    config_agent_server_tls_ctmpl        = local.config_agent_server_tls_ctmpl
-    config_agent_reload_vault_server_tls = local.config_agent_reload_vault_server_tls
-    config_agent_reload_rules            = local.config_agent_reload_rules
-    config_agent_service                 = local.config_agent_service
+  script_agent_write_config = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-config.sh.tftpl", {
+    config_agent_hcl = local.config_agent_hcl
   })
+
+  script_agent_write_tls_template = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-tls-template.sh.tftpl", {
+    config_agent_server_tls_ctmpl = local.config_agent_server_tls_ctmpl
+  })
+
+  script_agent_write_reload_script = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-reload-script.sh.tftpl", {
+    config_agent_reload_vault_server_tls = local.config_agent_reload_vault_server_tls
+  })
+
+  script_agent_write_polkit_rules = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-polkit-rules.sh.tftpl", {
+    config_agent_reload_rules = local.config_agent_reload_rules
+  })
+
+  script_agent_write_systemd_unit = templatefile("${path.module}/templates/scripts/agent/write-vault-agent-systemd-unit.sh.tftpl", {
+    config_agent_service = local.config_agent_service
+  })
+
+  script_agent_start = file("${path.module}/files/scripts/start-vault-agent.sh")
 
   vpc = var.existing_vpc != null ? {
     id                 = var.existing_vpc.vpc_id

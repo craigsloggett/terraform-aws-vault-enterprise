@@ -1,0 +1,16 @@
+write_vault_config() {
+  vault_config_file="$${1}"
+
+  private_ip="$(get_private_ip)"
+  instance_id="$(get_instance_id)"
+  availability_zone="$(get_availability_zone)"
+
+  log_info "Writing Vault configuration (bind=$${private_ip})"
+
+  cat >"$${vault_config_file}" <<EOF
+${config_vault_hcl}
+EOF
+
+  chown vault:vault "$${vault_config_file}"
+  chmod 0640 "$${vault_config_file}"
+}
