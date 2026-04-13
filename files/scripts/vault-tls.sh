@@ -46,7 +46,7 @@ issue_node_cert() {
       --output text)"
 
     # Write the new PKI CA cert to disk for use by clients connecting
-    # to this node after the TLS swap in replace_node_tls(). It is not
+    # to this node after the TLS swap in reload_vault_tls(). It is not
     # used for Vault API calls here, this node's listener is still
     # presenting the bootstrap cert until the SIGHUP, so VAULT_CACERT
     # must continue to point at the bootstrap CA.
@@ -87,15 +87,7 @@ issue_node_cert() {
   log_info "PKI-signed certificate written to ${vault_tls_cert_file}"
 }
 
-replace_node_tls() {
-  log_info "Reloading Vault TLS listener with PKI-signed certificate"
-
-  systemctl kill -s HUP vault
-
-  log_info "Vault TLS listener reloaded"
-}
-
-cleanup_bootstrap_tls() {
+write_pki_ca_cert() {
   vault_tls_ca_file="${1}"
   vault_tls_dir="${2}"
   ssm_pki_ca_cert_name="${3}"
@@ -125,4 +117,12 @@ cleanup_bootstrap_tls() {
     rm -f "${pki_ca_tmp}"
     log_info "Removed temporary PKI CA cert file ${pki_ca_tmp}"
   fi
+}
+
+reload_vault_tls() {
+  log_info "Reloading Vault TLS listener with PKI-signed certificate"
+
+  systemctl kill -s HUP vault
+
+  log_info "Vault TLS listener reloaded"
 }

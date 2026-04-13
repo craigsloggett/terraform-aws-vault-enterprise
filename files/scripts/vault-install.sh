@@ -68,8 +68,8 @@ install_vault() {
   log_info "Vault Enterprise ${version} installed"
 }
 
-start_services() {
-  log_info "Enabling the Vault service"
+start_vault() {
+  log_info "Starting Vault"
 
   systemctl daemon-reload
 
@@ -77,7 +77,7 @@ start_services() {
   # returns non-2xx until init/unseal is performed by an operator.
   systemctl enable --now vault
 
-  log_info "All services started"
+  log_info "Vault started"
 }
 
 wait_for_vault_api() {

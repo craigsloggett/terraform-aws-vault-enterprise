@@ -165,7 +165,7 @@ main() {
     "$${instance_id}" \
     "$${availability_zone}"
 
-  start_services
+  start_vault
   wait_for_vault_api
 
   if is_bootstrap_node \
@@ -178,6 +178,7 @@ main() {
       "$${ssm_cluster_state_name}"
     export VAULT_TOKEN="$(fetch_secret "$${vault_bootstrap_root_token_secret_arn}")"
     configure_autopilot
+    write_vault_snapshot_config "$${vault_snapshot_config_file}"
     configure_snapshots "$${vault_snapshot_config_file}"
     configure_pki_engine \
       "$${vault_fqdn}" \
@@ -213,8 +214,8 @@ main() {
       "$${ssm_pki_ca_cert_name}"
   fi
 
-  replace_node_tls
-  cleanup_bootstrap_tls \
+  reload_vault_tls
+  write_pki_ca_cert \
     "$${vault_tls_ca_file}" \
     "$${vault_tls_dir}" \
     "$${ssm_pki_ca_cert_name}"
