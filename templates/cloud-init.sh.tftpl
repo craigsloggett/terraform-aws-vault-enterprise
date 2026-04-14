@@ -162,10 +162,10 @@ get_imds_token() {
 #   Writes the metadata value to STDOUT.
 #######################################
 get_imds_metadata() {
-  path="$${1}"
-  token="$(get_imds_token)"
-  curl -s -H "X-aws-ec2-metadata-token: $${token}" \
-    "http://169.254.169.254/latest/meta-data/$${path}"
+  _path="$${1}"
+  _token="$(get_imds_token)"
+  curl -s -H "X-aws-ec2-metadata-token: $${_token}" \
+    "http://169.254.169.254/latest/meta-data/$${_path}"
 }
 
 #######################################
@@ -221,19 +221,19 @@ get_availability_zone() {
 #   Writes the secret value to STDOUT.
 #######################################
 fetch_secret() {
-  secret_arn="$${1}"
+  _secret_arn="$${1}"
 
-  for attempt in 1 2 3 4 5; do
-    if result=$(aws secretsmanager get-secret-value \
-      --secret-id "$${secret_arn}" \
+  for _attempt in 1 2 3 4 5; do
+    if _result=$(aws secretsmanager get-secret-value \
+      --secret-id "$${_secret_arn}" \
       --query SecretString --output text 2>/dev/null); then
-      printf '%s' "$${result}"
+      printf '%s' "$${_result}"
       return 0
     fi
     sleep 5
   done
 
-  log_error "Failed to retrieve secret after $${attempt} attempts, failing bootstrap"
+  log_error "Failed to retrieve secret after $${_attempt} attempts, failing bootstrap"
   return 1
 }
 
@@ -248,12 +248,12 @@ fetch_secret() {
 #   None.
 #######################################
 put_secret() {
-  secret_arn="$${1}"
-  secret_value="$${2}"
+  _secret_arn="$${1}"
+  _secret_value="$${2}"
 
   aws secretsmanager put-secret-value \
-    --secret-id "$${secret_arn}" \
-    --secret-string "$${secret_value}"
+    --secret-id "$${_secret_arn}" \
+    --secret-string "$${_secret_value}"
 }
 
 #######################################
@@ -270,20 +270,20 @@ put_secret() {
 #   Writes the parameter value to STDOUT.
 #######################################
 fetch_parameter() {
-  parameter_name="$${1}"
+  _parameter_name="$${1}"
 
-  for attempt in 1 2 3 4 5; do
-    if result=$(aws ssm get-parameter \
-      --name "$${parameter_name}" \
+  for _attempt in 1 2 3 4 5; do
+    if _result=$(aws ssm get-parameter \
+      --name "$${_parameter_name}" \
       --query "Parameter.Value" \
       --output text 2>/dev/null); then
-      printf '%s' "$${result}"
+      printf '%s' "$${_result}"
       return 0
     fi
     sleep 5
   done
 
-  log_error "Failed to retrieve parameter after $${attempt} attempts, failing bootstrap"
+  log_error "Failed to retrieve parameter after $${_attempt} attempts, failing bootstrap"
   return 1
 }
 
@@ -298,12 +298,12 @@ fetch_parameter() {
 #   None.
 #######################################
 put_parameter() {
-  parameter_name="$${1}"
-  parameter_value="$${2}"
+  _parameter_name="$${1}"
+  _parameter_value="$${2}"
 
   aws ssm put-parameter \
-    --name "$${parameter_name}" \
-    --value "$${parameter_value}" \
+    --name "$${_parameter_name}" \
+    --value "$${_parameter_value}" \
     --overwrite
 }
 
@@ -321,12 +321,12 @@ put_parameter() {
 #   0 if the cluster is initialized, non-zero otherwise.
 #######################################
 is_cluster_initialized() {
-  initialized="$(
+  _initialized="$(
     vault status -format=json 2>/dev/null |
       jq -r '.initialized' 2>/dev/null
   )" || true
 
-  [ "$${initialized}" = "true" ]
+  [ "$${_initialized}" = "true" ]
 }
 
 #######################################
@@ -340,10 +340,10 @@ is_cluster_initialized() {
 #   0 if this node won the bootstrap claim, non-zero otherwise.
 #######################################
 is_bootstrap_node() {
-  instance_id="$(get_instance_id)"
+  _instance_id="$(get_instance_id)"
 
   # Fetch all running instance IDs in this cluster by tag.
-  all_ids="$(
+  _all_ids="$(
     aws ec2 describe-instances \
       --filters \
       "Name=tag:$${CLUSTER_TAG_KEY},Values=$${CLUSTER_TAG_VALUE}" \
@@ -354,9 +354,9 @@ is_bootstrap_node() {
 
   # The --output text format returns tab-separated values on one line.
   # tr converts tabs to newlines before sort.
-  lowest_id="$(printf '%s' "$${all_ids}" | tr '\t' '\n' | sort | head -1)"
+  _lowest_id="$(printf '%s' "$${_all_ids}" | tr '\t' '\n' | sort | head -1)"
 
-  [ "$${instance_id}" = "$${lowest_id}" ]
+  [ "$${_instance_id}" = "$${_lowest_id}" ]
 }
 
 #######################################
@@ -385,16 +385,16 @@ get_vault_node_role() {
 #   None.
 #######################################
 wait_for_pki_ready() {
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    state="$(fetch_parameter "$${SSM_PKI_STATE_NAME}")" || true
+  for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+    _state="$(fetch_parameter "$${SSM_PKI_STATE_NAME}")" || true
 
-    if [ "$${state}" = "ready" ]; then
+    if [ "$${_state}" = "ready" ]; then
       return 0
     fi
     sleep 5
   done
 
-  log_error "Vault PKI was not ready after $${attempt} attempts, failing bootstrap"
+  log_error "Vault PKI was not ready after $${_attempt} attempts, failing bootstrap"
   return 1
 }
 
@@ -487,21 +487,21 @@ initialize_cluster() {
   log_info "Running vault operator init"
   # KMS auto-unseal is configured, so recovery shares/threshold are used
   # in place of unseal shares/threshold.
-  init_output="$(
+  _init_output="$(
     vault operator init \
       -format=json \
       -recovery-shares=5 \
       -recovery-threshold=3
   )"
 
-  root_token="$(printf '%s' "$${init_output}" | jq -r '.root_token')"
-  recovery_keys="$(printf '%s' "$${init_output}" | jq -c '.recovery_keys_b64')"
+  _root_token="$(printf '%s' "$${_init_output}" | jq -r '.root_token')"
+  _recovery_keys="$(printf '%s' "$${_init_output}" | jq -c '.recovery_keys_b64')"
 
   log_info "Storing bootstrap root token in Secrets Manager"
-  put_secret "$${VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN}" "$${root_token}"
+  put_secret "$${VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN}" "$${_root_token}"
 
   log_info "Storing recovery keys in Secrets Manager"
-  put_secret "$${VAULT_RECOVERY_KEYS_SECRET_ARN}" "$${recovery_keys}"
+  put_secret "$${VAULT_RECOVERY_KEYS_SECRET_ARN}" "$${_recovery_keys}"
 
   log_info "Writing cluster state: ready"
   put_parameter "$${SSM_CLUSTER_STATE_NAME}" "ready"
@@ -518,17 +518,17 @@ initialize_cluster() {
 #   None.
 #######################################
 join_cluster() {
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    state="$(fetch_parameter "$${SSM_CLUSTER_STATE_NAME}")" || true
+  for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+    _state="$(fetch_parameter "$${SSM_CLUSTER_STATE_NAME}")" || true
 
-    if [ "$${state}" = "ready" ]; then
+    if [ "$${_state}" = "ready" ]; then
       return 0
     fi
 
     sleep 5
   done
 
-  log_error "Unable to join the Vault cluster after $${attempt} attempts, failing bootstrap"
+  log_error "Unable to join the Vault cluster after $${_attempt} attempts, failing bootstrap"
   return 1
 }
 
@@ -543,8 +543,8 @@ join_cluster() {
 publish_cluster_ca_certificate() {
   log_info "Publishing PKI CA cert to SSM"
 
-  ca_cert_pem="$(vault read -field=certificate pki/cert/ca)"
-  put_parameter "$${SSM_PKI_CA_CERT_NAME}" "$${ca_cert_pem}"
+  _ca_cert_pem="$(vault read -field=certificate pki/cert/ca)"
+  put_parameter "$${SSM_PKI_CA_CERT_NAME}" "$${_ca_cert_pem}"
 
   log_info "PKI CA cert published to SSM"
 }
@@ -580,20 +580,20 @@ mark_pki_ready() {
 # Note: resolve_ebs_nvme_device temporarily disables noglob (set +f)
 # for the /dev/nvme* glob scan and re-enables it (set -f) before returning.
 resolve_ebs_nvme_device() {
-  target_name="$${1}"
+  _target_name="$${1}"
 
-  target_short="$${target_name#/dev/}"
+  _target_short="$${_target_name#/dev/}"
 
   set +f
-  for nvme in /dev/nvme*n1; do
-    [ -e "$${nvme}" ] || continue
+  for _nvme in /dev/nvme*n1; do
+    [ -e "$${_nvme}" ] || continue
 
-    attached="$(ebsnvme-id -b "$${nvme}" 2>/dev/null)" || continue
-    attached_short="$${attached#/dev/}"
+    _attached="$(ebsnvme-id -b "$${_nvme}" 2>/dev/null)" || continue
+    _attached_short="$${_attached#/dev/}"
 
-    if [ "$${attached_short}" = "$${target_short}" ]; then
+    if [ "$${_attached_short}" = "$${_target_short}" ]; then
       set -f
-      printf '%s' "$${nvme}"
+      printf '%s' "$${_nvme}"
       return 0
     fi
   done
@@ -613,49 +613,49 @@ resolve_ebs_nvme_device() {
 #   Filesystem label.
 #######################################
 prepare_disk() {
-  device_attachment_name="$${1}"
-  mount_point="$${2}"
-  fs_label="$${3}"
+  _device_attachment_name="$${1}"
+  _mount_point="$${2}"
+  _fs_label="$${3}"
 
   if ! command -v ebsnvme-id >/dev/null 2>&1; then
     log_error "ebsnvme-id not found, ensure amazon-ec2-utils is installed in the AMI"
     return 1
   fi
 
-  for attempt in 1 2 3 4 5; do
-    if device="$(resolve_ebs_nvme_device "$${device_attachment_name}")"; then
+  for _attempt in 1 2 3 4 5; do
+    if _device="$(resolve_ebs_nvme_device "$${_device_attachment_name}")"; then
       break
     fi
     sleep 5
   done
 
-  if [ -z "$${device}" ]; then
-    log_error "NVMe device was not found after $${attempt} attempts, failing bootstrap"
+  if [ -z "$${_device}" ]; then
+    log_error "NVMe device was not found after $${_attempt} attempts, failing bootstrap"
     return 1
   fi
 
-  if [ "$${#fs_label}" -gt 12 ]; then
-    log_error "XFS labels must be 12 characters or fewer: $${fs_label}"
+  if [ "$${#_fs_label}" -gt 12 ]; then
+    log_error "XFS labels must be 12 characters or fewer: $${_fs_label}"
     return 1
   fi
 
-  if ! blkid -p "$${device}" >/dev/null 2>&1; then
-    log_info "No filesystem on $${device}, formatting as xfs (label=$${fs_label})"
-    mkfs.xfs -L "$${fs_label}" "$${device}"
+  if ! blkid -p "$${_device}" >/dev/null 2>&1; then
+    log_info "No filesystem on $${_device}, formatting as xfs (label=$${_fs_label})"
+    mkfs.xfs -L "$${_fs_label}" "$${_device}"
   else
-    log_info "Filesystem already present on $${device}, skipping format"
+    log_info "Filesystem already present on $${_device}, skipping format"
   fi
 
-  log_info "Mounting $${device} at $${mount_point}"
-  mkdir -p "$${mount_point}"
-  mount -t xfs "$${device}" "$${mount_point}"
+  log_info "Mounting $${_device} at $${_mount_point}"
+  mkdir -p "$${_mount_point}"
+  mount -t xfs "$${_device}" "$${_mount_point}"
 
-  uuid="$(blkid -s UUID -o value "$${device}")"
-  if ! grep -q "$${uuid}" /etc/fstab; then
+  _uuid="$(blkid -s UUID -o value "$${_device}")"
+  if ! grep -q "$${_uuid}" /etc/fstab; then
     printf 'UUID=%s  %s  xfs  defaults,nofail  0  2\n' \
-      "$${uuid}" "$${mount_point}" \
+      "$${_uuid}" "$${_mount_point}" \
       >>/etc/fstab
-    log_info "Added fstab entry for UUID=$${uuid}"
+    log_info "Added fstab entry for UUID=$${_uuid}"
   fi
 }
 
@@ -672,14 +672,14 @@ prepare_disk() {
 #   None
 #######################################
 wait_for_network() {
-  for attempt in 1 2 3 4 5; do
+  for _attempt in 1 2 3 4 5; do
     if ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
       return 0
     fi
     sleep 5
   done
 
-  log_error "Network was not available after $${attempt} attempts, failing bootstrap"
+  log_error "Network was not available after $${_attempt} attempts, failing bootstrap"
   return 1
 }
 
@@ -835,12 +835,12 @@ EOF
 #   Writes the architecture string to STDOUT.
 #######################################
 detect_system_architecture() {
-  machine="$(uname -m)"
-  case "$${machine}" in
+  _machine="$(uname -m)"
+  case "$${_machine}" in
     x86_64) printf 'amd64' ;;
     aarch64) printf 'arm64' ;;
     *)
-      log_error "Unsupported architecture: $${machine}"
+      log_error "Unsupported architecture: $${_machine}"
       return 1
       ;;
   esac
@@ -857,35 +857,35 @@ detect_system_architecture() {
 #   Temporary directory for downloads.
 #######################################
 download_and_verify_vault() {
-  version="$${1}"
-  arch="$${2}"
-  tmp_dir="$${3}"
+  _version="$${1}"
+  _arch="$${2}"
+  _tmp_dir="$${3}"
 
-  base_url="https://releases.hashicorp.com/vault/$${version}"
-  zip_file="vault_$${version}_linux_$${arch}.zip"
-  sums_file="vault_$${version}_SHA256SUMS"
-  sig_file="vault_$${version}_SHA256SUMS.sig"
+  _base_url="https://releases.hashicorp.com/vault/$${_version}"
+  _zip_file="vault_$${_version}_linux_$${_arch}.zip"
+  _sums_file="vault_$${_version}_SHA256SUMS"
+  _sig_file="vault_$${_version}_SHA256SUMS.sig"
 
-  curl -fsSL -o "$${tmp_dir}/$${zip_file}" "$${base_url}/$${zip_file}"
-  curl -fsSL -o "$${tmp_dir}/$${sums_file}" "$${base_url}/$${sums_file}"
-  curl -fsSL -o "$${tmp_dir}/$${sig_file}" "$${base_url}/$${sig_file}"
+  curl -fsSL -o "$${_tmp_dir}/$${_zip_file}" "$${_base_url}/$${_zip_file}"
+  curl -fsSL -o "$${_tmp_dir}/$${_sums_file}" "$${_base_url}/$${_sums_file}"
+  curl -fsSL -o "$${_tmp_dir}/$${_sig_file}" "$${_base_url}/$${_sig_file}"
 
   # GPG signature verification (isolated keyring to avoid polluting the system)
-  export GNUPGHOME="$${tmp_dir}/.gnupg"
+  export GNUPGHOME="$${_tmp_dir}/.gnupg"
   mkdir -p "$${GNUPGHOME}"
   chmod 0700 "$${GNUPGHOME}"
 
-  curl -fsSL -o "$${tmp_dir}/hashicorp.asc" \
+  curl -fsSL -o "$${_tmp_dir}/hashicorp.asc" \
     https://www.hashicorp.com/.well-known/pgp-key.txt
-  gpg --quiet --import "$${tmp_dir}/hashicorp.asc"
+  gpg --quiet --import "$${_tmp_dir}/hashicorp.asc"
   printf '%s\n' "C874011F0AB405110D02105534365D9472D7468F:6:" | gpg --quiet --import-ownertrust
 
   log_info "Verifying GPG signature"
-  gpg --quiet --verify "$${tmp_dir}/$${sig_file}" "$${tmp_dir}/$${sums_file}"
+  gpg --quiet --verify "$${_tmp_dir}/$${_sig_file}" "$${_tmp_dir}/$${_sums_file}"
 
   log_info "Verifying SHA256 checksum"
-  cd "$${tmp_dir}" || return 1
-  sha256sum -c --ignore-missing "$${sums_file}"
+  cd "$${_tmp_dir}" || return 1
+  sha256sum -c --ignore-missing "$${_sums_file}"
   cd / || return 1
 }
 
@@ -901,16 +901,16 @@ install_vault() {
 
   log_info "Installing Vault Enterprise $${VAULT_VERSION}"
 
-  arch="$(detect_system_architecture)"
-  log_info "Detected architecture: $${arch}"
+  _arch="$(detect_system_architecture)"
+  log_info "Detected architecture: $${_arch}"
 
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$${tmp_dir}"' EXIT
+  _tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$${_tmp_dir}"' EXIT
 
-  download_and_verify_vault "$${VAULT_VERSION}" "$${arch}" "$${tmp_dir}"
+  download_and_verify_vault "$${VAULT_VERSION}" "$${_arch}" "$${_tmp_dir}"
 
-  unzip -o "$${tmp_dir}/vault_$${VAULT_VERSION}_linux_$${arch}.zip" -d "$${tmp_dir}"
-  mv "$${tmp_dir}/vault" /usr/bin/vault
+  unzip -o "$${_tmp_dir}/vault_$${VAULT_VERSION}_linux_$${_arch}.zip" -d "$${_tmp_dir}"
+  mv "$${_tmp_dir}/vault" /usr/bin/vault
   chown root:root /usr/bin/vault
   chmod 0755 /usr/bin/vault
   ln -sf /usr/bin/vault /usr/local/bin/vault
@@ -983,19 +983,19 @@ start_vault() {
 #   None
 #######################################
 wait_for_vault_api() {
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    status="$(
+  for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+    _status="$(
       curl -sk -o /dev/null -w '%%{http_code}' \
         "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null
     )" || true
 
-    if [ "$${status}" != "000" ]; then
+    if [ "$${_status}" != "000" ]; then
       return 0
     fi
     sleep 5
   done
 
-  log_error "Vault API did not respond after $${attempt} attempts, failing bootstrap"
+  log_error "Vault API did not respond after $${_attempt} attempts, failing bootstrap"
   return 1
 }
 
@@ -1012,10 +1012,10 @@ wait_for_vault_api() {
 #   None.
 #######################################
 write_vault_license() {
-  vault_license="$(fetch_vault_license)"
+  _vault_license="$(fetch_vault_license)"
 
   log_info "Writing the Vault license"
-  printf '%s\n' "$${vault_license}" >"$${VAULT_LICENSE_FILE}"
+  printf '%s\n' "$${_vault_license}" >"$${VAULT_LICENSE_FILE}"
   chown vault:vault "$${VAULT_LICENSE_FILE}"
   chmod 0640 "$${VAULT_LICENSE_FILE}"
 }
@@ -1033,11 +1033,11 @@ write_vault_license() {
 #   None.
 #######################################
 write_vault_config() {
-  private_ip="$(get_private_ip)"
-  instance_id="$(get_instance_id)"
-  availability_zone="$(get_availability_zone)"
+  _private_ip="$(get_private_ip)"
+  _instance_id="$(get_instance_id)"
+  _availability_zone="$(get_availability_zone)"
 
-  log_info "Writing Vault configuration (bind=$${private_ip})"
+  log_info "Writing Vault configuration (bind=$${_private_ip})"
 
   cat >"$${VAULT_CONFIG_FILE}" <<EOF
 ${config_vault_hcl}
@@ -1057,15 +1057,15 @@ EOF
 #   None.
 #######################################
 write_bootstrap_tls_materials() {
-  ca_cert="$(fetch_bootstrap_ca_cert)"
-  server_cert="$(fetch_bootstrap_server_cert)"
-  server_key="$(fetch_bootstrap_server_key)"
+  _ca_cert="$(fetch_bootstrap_ca_cert)"
+  _server_cert="$(fetch_bootstrap_server_cert)"
+  _server_key="$(fetch_bootstrap_server_key)"
 
   log_info "Writing bootstrap TLS materials"
 
-  printf '%s\n' "$${ca_cert}" >"$${VAULT_TLS_CA_FILE}"
-  printf '%s\n' "$${server_cert}" >"$${VAULT_TLS_CERT_FILE}"
-  printf '%s\n' "$${server_key}" >"$${VAULT_TLS_KEY_FILE}"
+  printf '%s\n' "$${_ca_cert}" >"$${VAULT_TLS_CA_FILE}"
+  printf '%s\n' "$${_server_cert}" >"$${VAULT_TLS_CERT_FILE}"
+  printf '%s\n' "$${_server_key}" >"$${VAULT_TLS_KEY_FILE}"
 
   chown vault:vault "$${VAULT_TLS_CA_FILE}" "$${VAULT_TLS_CERT_FILE}" "$${VAULT_TLS_KEY_FILE}"
   chmod 0644 "$${VAULT_TLS_CA_FILE}"
@@ -1334,44 +1334,44 @@ issue_vault_server_certificate() {
   # via the AWS IAM auth method. The bootstrap node already has VAULT_TOKEN
   # set from cluster convergence.
   if [ -z "$${VAULT_TOKEN:-}" ]; then
-    new_ca_cert="$(fetch_cluster_ca_certificate)"
+    _new_ca_cert="$(fetch_cluster_ca_certificate)"
 
     # Keep the bootstrap CA at VAULT_CACERT until the listener reloads. This
     # temporary file is only for follower-node AWS auth and later cleanup.
-    new_ca_cert_file="$${VAULT_TLS_DIR}/pki-ca.crt"
-    printf '%s\n' "$${new_ca_cert}" >"$${new_ca_cert_file}"
-    chown vault:vault "$${new_ca_cert_file}"
-    chmod 0644 "$${new_ca_cert_file}"
+    _new_ca_cert_file="$${VAULT_TLS_DIR}/pki-ca.crt"
+    printf '%s\n' "$${_new_ca_cert}" >"$${_new_ca_cert_file}"
+    chown vault:vault "$${_new_ca_cert_file}"
+    chmod 0644 "$${_new_ca_cert_file}"
 
     log_info "Authenticating via AWS IAM auth method"
-    vault_token="$(
+    _vault_token="$(
       vault login \
         -format=json \
         -method=aws \
         role=vault-server |
         jq -r '.auth.client_token'
     )"
-    export VAULT_TOKEN="$${vault_token}"
+    export VAULT_TOKEN="$${_vault_token}"
   fi
 
   log_info "Requesting certificate from PKI engine"
-  cert_json="$(
+  _cert_json="$(
     vault write -format=json pki/issue/vault-server \
       common_name="$${VAULT_FQDN}" \
       ttl="$${VAULT_PKI_SERVER_CERT_TTL}"
   )"
 
-  tmp_cert="$${VAULT_TLS_DIR}/server.crt.tmp"
-  tmp_key="$${VAULT_TLS_DIR}/server.key.tmp"
+  _tmp_cert="$${VAULT_TLS_DIR}/server.crt.tmp"
+  _tmp_key="$${VAULT_TLS_DIR}/server.key.tmp"
 
-  printf '%s\n' "$(printf '%s' "$${cert_json}" | jq -r '.data.certificate')" >"$${tmp_cert}"
-  printf '%s\n' "$(printf '%s' "$${cert_json}" | jq -r '.data.private_key')" >"$${tmp_key}"
+  printf '%s\n' "$(printf '%s' "$${_cert_json}" | jq -r '.data.certificate')" >"$${_tmp_cert}"
+  printf '%s\n' "$(printf '%s' "$${_cert_json}" | jq -r '.data.private_key')" >"$${_tmp_key}"
 
-  chown vault:vault "$${tmp_cert}" "$${tmp_key}"
-  chmod 0640 "$${tmp_cert}" "$${tmp_key}"
+  chown vault:vault "$${_tmp_cert}" "$${_tmp_key}"
+  chmod 0640 "$${_tmp_cert}" "$${_tmp_key}"
 
-  mv "$${tmp_cert}" "$${VAULT_TLS_CERT_FILE}"
-  mv "$${tmp_key}" "$${VAULT_TLS_KEY_FILE}"
+  mv "$${_tmp_cert}" "$${VAULT_TLS_CERT_FILE}"
+  mv "$${_tmp_key}" "$${VAULT_TLS_KEY_FILE}"
 
   log_info "PKI-signed certificate written to $${VAULT_TLS_CERT_FILE}"
 }
@@ -1401,20 +1401,20 @@ reload_vault_listener() {
 #   None.
 #######################################
 write_cluster_ca_certificate() {
-  cluster_ca_cert="$(fetch_cluster_ca_certificate)"
+  _cluster_ca_cert="$(fetch_cluster_ca_certificate)"
 
   log_info "Replacing bootstrap CA cert with PKI CA cert on disk"
 
-  printf '%s\n' "$${cluster_ca_cert}" >"$${VAULT_TLS_CA_FILE}"
+  printf '%s\n' "$${_cluster_ca_cert}" >"$${VAULT_TLS_CA_FILE}"
   chown vault:vault "$${VAULT_TLS_CA_FILE}"
   chmod 0644 "$${VAULT_TLS_CA_FILE}"
 
   log_info "Bootstrap CA cert replaced with PKI CA cert at $${VAULT_TLS_CA_FILE}"
 
-  temporary_cluster_ca_file="$${VAULT_TLS_DIR}/pki-ca.crt"
-  if [ -f "$${temporary_cluster_ca_file}" ]; then
-    rm -f "$${temporary_cluster_ca_file}"
-    log_info "Removed temporary PKI CA cert file $${temporary_cluster_ca_file}"
+  _temporary_cluster_ca_file="$${VAULT_TLS_DIR}/pki-ca.crt"
+  if [ -f "$${_temporary_cluster_ca_file}" ]; then
+    rm -f "$${_temporary_cluster_ca_file}"
+    log_info "Removed temporary PKI CA cert file $${_temporary_cluster_ca_file}"
   fi
 }
 
@@ -1630,10 +1630,10 @@ main() {
   phase_render_bootstrap_artifacts
   phase_start_vault
 
-  vault_node_role="$(get_vault_node_role)"
+  _vault_node_role="$(get_vault_node_role)"
 
-  phase_converge_cluster "$${vault_node_role}"
-  phase_enable_pki_and_tls "$${vault_node_role}"
+  phase_converge_cluster "$${_vault_node_role}"
+  phase_enable_pki_and_tls "$${_vault_node_role}"
   phase_enable_agent_rotation
 
   log_info "=== Bootstrap complete ==="

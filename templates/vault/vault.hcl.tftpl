@@ -5,7 +5,7 @@ cluster_name  = "${cluster_name}"
 log_level  = "info"
 log_format = "json"
 
-cluster_addr = "https://$${private_ip}:8201"
+cluster_addr = "https://$${_private_ip}:8201"
 api_addr     = "https://${vault_fqdn}:8200"
 license_path = "/opt/vault/vault.hclic"
 
@@ -21,8 +21,8 @@ listener "tcp" {
 
 storage "raft" {
   path                      = "/var/opt/vault/data"
-  node_id                   = "$${instance_id}"
-  autopilot_redundancy_zone = "$${availability_zone}"
+  node_id                   = "$${_instance_id}"
+  autopilot_redundancy_zone = "$${_availability_zone}"
 
   retry_join {
     auto_join             = "provider=aws tag_key=${cluster_tag_key} tag_value=${cluster_tag_value}"
