@@ -37,48 +37,42 @@ readonly VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE="$${VAULT_AGENT_TEMPLATE_DIR}/vaul
 readonly VAULT_AGENT_SERVER_TLS_RELOAD_FILE="$${VAULT_LIBEXEC_DIR}/vault-server-tls-reload.sh"
 readonly VAULT_AGENT_RELOAD_RULES_FILE="/etc/polkit-1/rules.d/10-vault-agent-reload.rules"
 
-# Cluster Initialization
+# Environment
 readonly VAULT_VERSION="${vault_version}"
 readonly VAULT_FQDN="${vault_fqdn}"
-readonly VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN="${vault_bootstrap_root_token_secret_arn}"
-readonly SSM_CLUSTER_STATE_NAME="${ssm_cluster_state_name}"
-readonly SSM_PKI_STATE_NAME="${ssm_pki_state_name}"
-readonly SSM_PKI_CA_CERT_NAME="${ssm_pki_ca_cert_name}"
-
-# AWS
 readonly AWS_REGION="${aws_region}"
 
-# Cluster Discovery
-readonly CLUSTER_TAG_KEY="${cluster_tag_key}"
-readonly CLUSTER_TAG_VALUE="${cluster_tag_value}"
-readonly CLUSTER_NAME="${cluster_name}"
-
-# Secrets Manager ARNs
-readonly VAULT_RECOVERY_KEYS_SECRET_ARN="${vault_recovery_keys_secret_arn}"
-readonly BOOTSTRAP_TLS_CA_CERT_SECRET_ARN="${bootstrap_tls_ca_cert_secret_arn}"
-readonly BOOTSTRAP_TLS_SERVER_CERT_SECRET_ARN="${bootstrap_tls_server_cert_secret_arn}"
-readonly BOOTSTRAP_TLS_SERVER_KEY_SECRET_ARN="${bootstrap_tls_server_key_secret_arn}"
-readonly VAULT_LICENSE_SECRET_ARN="${vault_license_secret_arn}"
-
-# IAM
-readonly VAULT_IAM_ROLE_ARN="${vault_iam_role_arn}"
-
-# EBS Device Names
+# Prepare Storage
 readonly EBS_RAFT_DEVICE_NAME="${ebs_raft_device_name}"
 readonly EBS_AUDIT_DEVICE_NAME="${ebs_audit_device_name}"
 
-# Autopilot
+# Bootstrap Artifacts
+readonly VAULT_LICENSE_SECRET_ARN="${vault_license_secret_arn}"
+readonly BOOTSTRAP_TLS_CA_CERT_SECRET_ARN="${bootstrap_tls_ca_cert_secret_arn}"
+readonly BOOTSTRAP_TLS_SERVER_CERT_SECRET_ARN="${bootstrap_tls_server_cert_secret_arn}"
+readonly BOOTSTRAP_TLS_SERVER_KEY_SECRET_ARN="${bootstrap_tls_server_key_secret_arn}"
+
+# Cluster Coordination
+readonly CLUSTER_TAG_KEY="${cluster_tag_key}"
+readonly CLUSTER_TAG_VALUE="${cluster_tag_value}"
+readonly SSM_CLUSTER_STATE_NAME="${ssm_cluster_state_name}"
+readonly VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN="${vault_bootstrap_root_token_secret_arn}"
+readonly VAULT_RECOVERY_KEYS_SECRET_ARN="${vault_recovery_keys_secret_arn}"
 readonly VAULT_MINIMUM_QUORUM_SIZE="${vault_minimum_quorum_size}"
 
-# Vault PKI Organization
+# PKI and TLS
+readonly CLUSTER_NAME="${cluster_name}"
+readonly SSM_PKI_STATE_NAME="${ssm_pki_state_name}"
+readonly SSM_PKI_CA_CERT_NAME="${ssm_pki_ca_cert_name}"
 readonly VAULT_PKI_ORGANIZATION="${vault_pki_organization}"
 readonly VAULT_PKI_COUNTRY="${vault_pki_country}"
-
-# Vault PKI TTL Configuration
 readonly VAULT_PKI_MOUNT_MAX_TTL="87600h"
 readonly VAULT_PKI_ROOT_CA_TTL="87600h"
 readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="24h"
 readonly VAULT_PKI_SERVER_CERT_TTL="24h"
+
+# AWS Auth
+readonly VAULT_IAM_ROLE_ARN="${vault_iam_role_arn}"
 readonly VAULT_AWS_AUTH_ROLE_MAX_TTL="24h"
 readonly VAULT_AWS_AUTH_ROLE_TTL="4h"
 
