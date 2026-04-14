@@ -245,6 +245,24 @@ is_bootstrap_node() {
 }
 
 #######################################
+# Return the role of this node: "bootstrap" if it won the bootstrap claim,
+# "follower" otherwise.
+# Globals:
+#   AWS_REGION
+# Arguments:
+#   None.
+# Outputs:
+#   Writes "bootstrap" or "follower" to STDOUT.
+#######################################
+get_vault_node_role() {
+  if is_bootstrap_node; then
+    printf 'bootstrap'
+  else
+    printf 'follower'
+  fi
+}
+
+#######################################
 # Block until the SSM PKI-ready flag has been published by the bootstrap node.
 # Globals:
 #   AWS_REGION, SSM_PKI_STATE_NAME
@@ -1468,23 +1486,23 @@ phase_start_vault() {
 }
 
 phase_converge_cluster() {
-  if is_bootstrap_node; then
-    vault_node_role="bootstrap"
+  _vault_node_role="$${1}"
 
+  if [ "$${_vault_node_role}" = "bootstrap" ]; then
     initialize_cluster
     export VAULT_TOKEN="$(fetch_secret "$${VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN}")"
 
     configure_autopilot
     configure_snapshots
   else
-    vault_node_role="follower"
-
     join_cluster
   fi
 }
 
 phase_enable_pki_and_tls() {
-  if [ "$${vault_node_role}" = "bootstrap" ]; then
+  _vault_node_role="$${1}"
+
+  if [ "$${_vault_node_role}" = "bootstrap" ]; then
     configure_pki_engine
     write_vault_server_policy
     publish_cluster_ca_certificate
@@ -1531,8 +1549,11 @@ main() {
   phase_prepare_vault_runtime
   phase_render_bootstrap_artifacts
   phase_start_vault
-  phase_converge_cluster
-  phase_enable_pki_and_tls
+
+  vault_node_role="$(get_vault_node_role)"
+
+  phase_converge_cluster "$${vault_node_role}"
+  phase_enable_pki_and_tls "$${vault_node_role}"
   phase_enable_agent_rotation
 
   log_info "=== Bootstrap complete ==="
