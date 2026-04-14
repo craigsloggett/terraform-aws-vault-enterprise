@@ -41,13 +41,13 @@ readonly VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE="$${VAULT_AGENT_TEMPLATE_DIR}/vaul
 readonly VAULT_AGENT_SERVER_TLS_RELOAD_FILE="$${VAULT_LIBEXEC_DIR}/vault-server-tls-reload.sh"
 readonly VAULT_AGENT_RELOAD_RULES_FILE="/etc/polkit-1/rules.d/10-vault-agent-reload.rules"
 
-
-# Cluster initialization coordination
+# Cluster Initialization
+readonly VAULT_VERSION="${vault_version}"
+readonly VAULT_FQDN="${vault_fqdn}"
+readonly VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN="${vault_bootstrap_root_token_secret_arn}"
 readonly SSM_CLUSTER_STATE_NAME="${ssm_cluster_state_name}"
 readonly SSM_PKI_STATE_NAME="${ssm_pki_state_name}"
 readonly SSM_PKI_CA_CERT_NAME="${ssm_pki_ca_cert_name}"
-readonly VAULT_FQDN="${vault_fqdn}"
-readonly VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN="${vault_bootstrap_root_token_secret_arn}"
 
 # Vault PKI TTL Configuration
 readonly VAULT_PKI_MOUNT_MAX_TTL="87600h"
@@ -56,7 +56,6 @@ readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="24h"
 readonly VAULT_PKI_SERVER_CERT_TTL="24h"
 readonly VAULT_AWS_AUTH_ROLE_MAX_TTL="24h"
 readonly VAULT_AWS_AUTH_ROLE_TTL="4h"
-
 
 # ---------------------------------------------------------------------------
 # Function Definitions
@@ -818,9 +817,8 @@ download_and_verify_vault() {
 #   None
 #######################################
 install_vault() {
-  vault_version="${vault_version}"
 
-  log_info "Installing Vault Enterprise $${vault_version}"
+  log_info "Installing Vault Enterprise $${VAULT_VERSION}"
 
   arch="$(get_system_architecture)"
   log_info "Detected architecture: $${arch}"
@@ -828,15 +826,15 @@ install_vault() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$${tmp_dir}"' EXIT
 
-  download_and_verify_vault "$${vault_version}" "$${arch}" "$${tmp_dir}"
+  download_and_verify_vault "$${VAULT_VERSION}" "$${arch}" "$${tmp_dir}"
 
-  unzip -o "$${tmp_dir}/vault_$${vault_version}_linux_$${arch}.zip" -d "$${tmp_dir}"
+  unzip -o "$${tmp_dir}/vault_$${VAULT_VERSION}_linux_$${arch}.zip" -d "$${tmp_dir}"
   mv "$${tmp_dir}/vault" /usr/bin/vault
   chown root:root /usr/bin/vault
   chmod 0755 /usr/bin/vault
   ln -sf /usr/bin/vault /usr/local/bin/vault
 
-  log_info "Vault Enterprise $${vault_version} installed"
+  log_info "Vault Enterprise $${VAULT_VERSION} installed"
 }
 
 #######################################
