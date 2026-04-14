@@ -626,7 +626,9 @@ prepare_disk() {
   fi
 
   for attempt in 1 2 3 4 5; do
-    device="$(resolve_ebs_nvme_device "$${device_attachment_name}")" && break
+    if device="$(resolve_ebs_nvme_device "$${device_attachment_name}")"; then
+      break
+    fi
     sleep 5
   done
 
