@@ -238,6 +238,25 @@ fetch_secret() {
 }
 
 #######################################
+# Write a value to an AWS Secrets Manager secret.
+# Globals:
+#   AWS_REGION
+# Arguments:
+#   Secret ARN or name.
+#   Secret value.
+# Outputs:
+#   None.
+#######################################
+put_secret() {
+  secret_arn="$${1}"
+  secret_value="$${2}"
+
+  aws secretsmanager put-secret-value \
+    --secret-id "$${secret_arn}" \
+    --secret-string "$${secret_value}"
+}
+
+#######################################
 # Helpers — AWS SSM Parameter Store
 #######################################
 
@@ -467,14 +486,10 @@ initialize_cluster() {
   recovery_keys="$(printf '%s' "$${init_output}" | jq -c '.recovery_keys_b64')"
 
   log_info "Storing bootstrap root token in Secrets Manager"
-  aws secretsmanager put-secret-value \
-    --secret-id "$${VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN}" \
-    --secret-string "$${root_token}"
+  put_secret "$${VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN}" "$${root_token}"
 
   log_info "Storing recovery keys in Secrets Manager"
-  aws secretsmanager put-secret-value \
-    --secret-id "$${VAULT_RECOVERY_KEYS_SECRET_ARN}" \
-    --secret-string "$${recovery_keys}"
+  put_secret "$${VAULT_RECOVERY_KEYS_SECRET_ARN}" "$${recovery_keys}"
 
   log_info "Writing cluster state: ready"
   put_parameter "$${SSM_CLUSTER_STATE_NAME}" "ready"
