@@ -189,6 +189,20 @@ put_parameter() {
 #   Vault Cluster Discovery Helpers   #
 #######################################
 
+get_vault_node_role() {
+  cluster_state="$(fetch_parameter "$${SSM_CLUSTER_STATE_NAME}" 2>/dev/null)" || cluster_state=""
+
+  if [ "$${cluster_state}" = "ready" ]; then
+    printf 'follower'
+  else
+    if is_bootstrap_node; then
+      printf 'bootstrap'
+    else
+      printf 'follower'
+    fi
+  fi
+}
+
 is_bootstrap_node() {
   instance_id="$(get_instance_id)"
 
@@ -205,38 +219,6 @@ is_bootstrap_node() {
   lowest_id="$(printf '%s' "$${all_ids}" | tr '\t' '\n' | sort | head -1)"
 
   [ "$${instance_id}" = "$${lowest_id}" ]
-}
-
-get_vault_node_role() {
-  cluster_state="$(fetch_parameter "$${SSM_CLUSTER_STATE_NAME}" 2>/dev/null)" || cluster_state=""
-
-  if [ "$${cluster_state}" = "ready" ]; then
-    printf 'follower'
-  else
-    if is_bootstrap_node; then
-      printf 'bootstrap'
-    else
-      printf 'follower'
-    fi
-  fi
-}
-
-wait_for_pki_ready() {
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    state="$(fetch_parameter "$${SSM_PKI_STATE_NAME}")" || true
-
-    if [ "$${state}" = "ready" ]; then
-      return 0
-    fi
-    sleep 5
-  done
-
-  log_error "Vault PKI was not ready after $${attempt} attempts, failing bootstrap"
-  return 1
-}
-
-fetch_pki_ca_cert() {
-  fetch_parameter "$${SSM_PKI_CA_CERT_NAME}"
 }
 
 fetch_bootstrap_ca_cert() {
@@ -851,6 +833,24 @@ reload_vault_listener() {
   systemctl kill --signal=SIGHUP --kill-whom=main vault.service
 
   log_info "Vault TLS listener reloaded"
+}
+
+wait_for_pki_ready() {
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    state="$(fetch_parameter "$${SSM_PKI_STATE_NAME}")" || true
+
+    if [ "$${state}" = "ready" ]; then
+      return 0
+    fi
+    sleep 5
+  done
+
+  log_error "Vault PKI was not ready after $${attempt} attempts, failing bootstrap"
+  return 1
+}
+
+fetch_pki_ca_cert() {
+  fetch_parameter "$${SSM_PKI_CA_CERT_NAME}"
 }
 
 #######################################
