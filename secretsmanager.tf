@@ -1,6 +1,6 @@
 resource "aws_secretsmanager_secret" "vault_enterprise_license" {
   name_prefix = "${var.project_name}-vault-enterprise-license-"
-  description = "Vault Enterprise license"
+  description = "Vault Enterprise License"
 
   tags = merge(var.common_tags, { Name = "${var.project_name}-vault-enterprise-license" })
 }
