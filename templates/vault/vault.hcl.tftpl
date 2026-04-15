@@ -5,7 +5,7 @@ cluster_name  = "${cluster_name}"
 log_level  = "info"
 log_format = "json"
 
-cluster_addr = "https://$${_private_ip}:8201"
+cluster_addr = "https://$${private_ip}:8201"
 api_addr     = "https://${vault_fqdn}:8200"
 license_path = "/opt/vault/vault.hclic"
 
