@@ -33,7 +33,7 @@ output "ec2_ami_name" {
   value       = var.ec2_ami.name
 }
 
-output "vault_tls_ca_bundle" {
-  description = "Vault PKI Managed TLS CA Bundle"
-  value       = aws_ssm_parameter.vault_tls_ca_bundle.value
+output "vault_tls_ca_bundle_ssm_name" {
+  description = "SSM Parameter for the Vault PKI managed TLS CA bundle."
+  value       = aws_ssm_parameter.vault_tls_ca_bundle.name
 }
