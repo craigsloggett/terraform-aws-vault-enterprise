@@ -994,6 +994,9 @@ main() {
     configure_snapshots
   else
     join_cluster
+    log_info "VAULT_ADDR: $${VAULT_ADDR}"
+    log_info "VAULT_TLS_SERVER_NAME: $${VAULT_TLS_SERVER_NAME}"
+    log_info "VAULT_CACERT: $${VAULT_CACERT}"
     wait_for_vault_unsealed
   fi
 
