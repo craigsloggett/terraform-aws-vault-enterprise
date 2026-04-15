@@ -53,21 +53,23 @@ readonly BOOTSTRAP_TLS_SERVER_CERT_SECRET_ARN="${bootstrap_tls_server_cert_secre
 readonly BOOTSTRAP_TLS_SERVER_KEY_SECRET_ARN="${bootstrap_tls_server_key_secret_arn}"
 
 # Cluster Coordination
-readonly CLUSTER_TAG_KEY="${cluster_tag_key}"
-readonly CLUSTER_TAG_VALUE="${cluster_tag_value}"
-readonly SSM_CLUSTER_STATE_NAME="${ssm_cluster_state_name}"
+readonly VAULT_CLUSTER_TAG_KEY="${vault_cluster_tag_key}"
+readonly VAULT_CLUSTER_TAG_VALUE="${vault_cluster_tag_value}"
+readonly VAULT_CLUSTER_STATE_SSM_NAME="${vault_cluster_state_ssm_name}"
 readonly VAULT_BOOTSTRAP_ROOT_TOKEN_SECRET_ARN="${vault_bootstrap_root_token_secret_arn}"
 readonly VAULT_RECOVERY_KEYS_SECRET_ARN="${vault_recovery_keys_secret_arn}"
 readonly VAULT_MINIMUM_QUORUM_SIZE="${vault_minimum_quorum_size}"
 
 # PKI and TLS
 readonly CLUSTER_NAME="${cluster_name}"
-readonly SSM_PKI_STATE_NAME="${ssm_pki_state_name}"
-readonly SSM_PKI_CA_CERT_NAME="${ssm_pki_ca_cert_name}"
+readonly VAULT_PKI_STATE_SSM_NAME="${vault_pki_state_ssm_name}"
+readonly VAULT_PKI_ROOT_CA_CERT_SSM_NAME="${vault_pki_root_ca_cert_ssm_name}"
 readonly VAULT_PKI_ORGANIZATION="${vault_pki_organization}"
 readonly VAULT_PKI_COUNTRY="${vault_pki_country}"
-readonly VAULT_PKI_MOUNT_MAX_TTL="87600h"
+readonly VAULT_PKI_ROOT_MOUNT_MAX_TTL="87600h"
 readonly VAULT_PKI_ROOT_CA_TTL="87600h"
+readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="26280h"
+readonly VAULT_PKI_VAULT_CA_TTL="26280h"
 readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="24h"
 readonly VAULT_PKI_SERVER_CERT_TTL="24h"
 
@@ -190,7 +192,7 @@ put_parameter() {
 #######################################
 
 get_vault_node_role() {
-  cluster_state="$(fetch_parameter "$${SSM_CLUSTER_STATE_NAME}" 2>/dev/null)" || cluster_state=""
+  cluster_state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" 2>/dev/null)" || cluster_state=""
 
   if [ "$${cluster_state}" = "ready" ]; then
     printf 'follower'
@@ -210,7 +212,7 @@ is_bootstrap_node() {
   all_ids="$(
     aws ec2 describe-instances \
       --filters \
-      "Name=tag:$${CLUSTER_TAG_KEY},Values=$${CLUSTER_TAG_VALUE}" \
+      "Name=tag:$${VAULT_CLUSTER_TAG_KEY},Values=$${VAULT_CLUSTER_TAG_VALUE}" \
       "Name=instance-state-name,Values=running" \
       --query "Reservations[].Instances[].InstanceId" \
       --output text
@@ -264,14 +266,14 @@ initialize_vault_cluster() {
   put_secret "$${VAULT_RECOVERY_KEYS_SECRET_ARN}" "$${recovery_keys}"
 
   log_info "Writing cluster state: ready"
-  put_parameter "$${SSM_CLUSTER_STATE_NAME}" "ready"
+  put_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" "ready"
 
   log_info "Cluster initialization complete"
 }
 
 join_cluster() {
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    state="$(fetch_parameter "$${SSM_CLUSTER_STATE_NAME}")" || true
+    state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}")" || true
 
     if [ "$${state}" = "ready" ]; then
       return 0
@@ -284,19 +286,19 @@ join_cluster() {
   return 1
 }
 
-publish_cluster_ca_certificate() {
-  log_info "Publishing PKI CA cert to SSM"
+publish_root_ca_certificate() {
+  log_info "Publishing PKI root CA cert to SSM"
 
-  ca_cert_pem="$(vault read -field=certificate pki/cert/ca)"
-  put_parameter "$${SSM_PKI_CA_CERT_NAME}" "$${ca_cert_pem}"
+  root_ca_cert_pem="$(vault read -field=certificate pki_root/cert/ca)"
+  put_parameter "$${VAULT_PKI_ROOT_CA_CERT_SSM_NAME}" "$${root_ca_cert_pem}"
 
-  log_info "PKI CA cert published to SSM"
+  log_info "PKI root CA cert published to SSM"
 }
 
 mark_pki_ready() {
   log_info "Writing PKI state: ready"
 
-  put_parameter "$${SSM_PKI_STATE_NAME}" "ready"
+  put_parameter "$${VAULT_PKI_STATE_SSM_NAME}" "ready"
 }
 
 #######################################
@@ -685,23 +687,23 @@ EOF
 #        Configure PKI Engine         #
 #######################################
 
-configure_pki_mount() {
-  log_info "Enabling Vault PKI secrets engine"
+configure_pki_root_secrets_engine() {
+  log_info "Enabling root PKI secrets engine"
 
-  if ! vault secrets list -format=json | jq -e '."pki/"' >/dev/null 2>&1; then
-    vault secrets enable pki
+  if ! vault secrets list -format=json | jq -e '."pki_root/"' >/dev/null 2>&1; then
+    vault secrets enable -path=pki_root pki
   fi
 
-  vault secrets tune -max-lease-ttl="$${VAULT_PKI_MOUNT_MAX_TTL}" pki >/dev/null
+  vault secrets tune -max-lease-ttl="$${VAULT_PKI_ROOT_MOUNT_MAX_TTL}" pki_root >/dev/null
 
-  log_info "Vault PKI secrets engine enabled"
+  log_info "Root PKI secrets engine enabled"
 }
 
 configure_pki_root_ca() {
-  log_info "Generating PKI root CA"
+  log_info "Configuring PKI root CA"
 
-  vault write pki/root/generate/internal \
-    common_name="$${CLUSTER_NAME} Vault Root CA" \
+  vault write pki_root/root/generate/internal \
+    common_name="$${CLUSTER_NAME} Root CA" \
     organization="$${VAULT_PKI_ORGANIZATION}" \
     country="$${VAULT_PKI_COUNTRY}" \
     ttl="$${VAULT_PKI_ROOT_CA_TTL}" \
@@ -709,25 +711,68 @@ configure_pki_root_ca() {
     key_bits=384 \
     >/dev/null
 
-  log_info "PKI root CA generated"
-}
-
-configure_pki_urls() {
-  log_info "Configuring PKI issuing URLs"
-
-  vault write pki/config/urls \
-    issuing_certificates="https://$${VAULT_FQDN}:8200/v1/pki/ca" \
-    crl_distribution_points="https://$${VAULT_FQDN}:8200/v1/pki/crl" \
-    ocsp_servers="https://$${VAULT_FQDN}:8200/v1/pki/ocsp" \
+  vault write pki_root/config/urls \
+    issuing_certificates="https://$${VAULT_FQDN}:8200/v1/pki_root/ca" \
+    crl_distribution_points="https://$${VAULT_FQDN}:8200/v1/pki_root/crl" \
+    ocsp_servers="https://$${VAULT_FQDN}:8200/v1/pki_root/ocsp" \
     >/dev/null
 
-  log_info "PKI issuing URLs configured"
+  log_info "PKI root CA configured"
+}
+
+configure_pki_vault_secrets_engine() {
+  log_info "Enabling Vault PKI secrets engine"
+
+  if ! vault secrets list -format=json | jq -e '."pki_vault/"' >/dev/null 2>&1; then
+    vault secrets enable -path=pki_vault pki
+  fi
+
+  vault secrets tune -max-lease-ttl="$${VAULT_PKI_VAULT_MOUNT_MAX_TTL}" pki_vault >/dev/null
+
+  log_info "Vault PKI secrets engine enabled"
+}
+
+configure_pki_vault_intermediate_ca() {
+  log_info "Configuring Vault PKI intermediate CA"
+
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$${tmp_dir}"' EXIT
+
+  # Generate CSR from the intermediate mount
+  vault write -format=json pki_vault/intermediate/generate/internal \
+    common_name="$${CLUSTER_NAME} Vault Intermediate CA" \
+    organization="$${VAULT_PKI_ORGANIZATION}" \
+    country="$${VAULT_PKI_COUNTRY}" \
+    key_type=ec \
+    key_bits=384 |
+    jq -r '.data.csr' >"$${tmp_dir}/pki_vault_intermediate.csr"
+
+  # Sign the CSR with the root CA
+  vault write -format=json pki_root/root/sign-intermediate \
+    csr=@"$${tmp_dir}/pki_vault_intermediate.csr" \
+    common_name="$${CLUSTER_NAME} Vault Intermediate CA" \
+    ttl="$${VAULT_PKI_VAULT_CA_TTL}" |
+    jq -r '.data.certificate' >"$${tmp_dir}/pki_vault_intermediate.crt"
+
+  # Import the signed cert back into the intermediate mount
+  vault write pki_vault/intermediate/set-signed \
+    certificate=@"$${tmp_dir}/pki_vault_intermediate.crt"
+
+  # Clean up CSR/cert from disk
+  rm /tmp/pki_vault_intermediate.csr /tmp/pki_vault_intermediate.crt
+
+  vault write pki_vault/config/urls \
+    issuing_certificates="https://$${VAULT_FQDN}:8200/v1/pki_vault/ca" \
+    crl_distribution_points="https://$${VAULT_FQDN}:8200/v1/pki_vault/crl" \
+    ocsp_servers="https://$${VAULT_FQDN}:8200/v1/pki_vault/ocsp"
+
+  log_info "Vault PKI intermediate CA configured"
 }
 
 configure_vault_server_pki_role() {
   log_info "Creating vault-server PKI role"
 
-  vault write pki/roles/vault-server \
+  vault write pki_vault/roles/vault-server \
     allowed_domains="$${VAULT_FQDN}" \
     allow_bare_domains=true \
     allow_subdomains=false \
@@ -742,18 +787,11 @@ configure_vault_server_pki_role() {
   log_info "vault-server PKI role created"
 }
 
-configure_pki_engine() {
-  configure_pki_mount
-  configure_pki_root_ca
-  configure_pki_urls
-  configure_vault_server_pki_role
-}
-
 write_vault_server_policy() {
   log_info "Writing vault-server policy"
 
   vault policy write vault-server - <<EOF
-path "pki/issue/vault-server" {
+path "pki_vault/issue/vault-server" {
   capabilities = ["create", "update"]
 }
 EOF
@@ -764,13 +802,13 @@ EOF
 write_cluster_ca_certificate() {
   cluster_ca_cert="$(fetch_pki_ca_cert)"
 
-  log_info "Replacing bootstrap CA cert with PKI CA cert on disk"
+  log_info "Replacing bootstrap CA cert with PKI root CA cert on disk"
 
   printf '%s\n' "$${cluster_ca_cert}" >"$${VAULT_TLS_CA_FILE}"
   chown vault:vault "$${VAULT_TLS_CA_FILE}"
   chmod 0644 "$${VAULT_TLS_CA_FILE}"
 
-  log_info "Bootstrap CA cert replaced with PKI CA cert at $${VAULT_TLS_CA_FILE}"
+  log_info "Bootstrap CA cert replaced with PKI root CA cert at $${VAULT_TLS_CA_FILE}"
 
   temporary_cluster_ca_file="$${VAULT_TLS_DIR}/pki-ca.crt"
   if [ -f "$${temporary_cluster_ca_file}" ]; then
@@ -807,7 +845,7 @@ issue_vault_server_certificate() {
 
   log_info "Requesting certificate from PKI engine"
   cert_json="$(
-    vault write -format=json pki/issue/vault-server \
+    vault write -format=json pki_vault/issue/vault-server \
       common_name="$${VAULT_FQDN}" \
       ttl="$${VAULT_PKI_SERVER_CERT_TTL}"
   )"
@@ -837,7 +875,7 @@ reload_vault_listener() {
 
 wait_for_pki_ready() {
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    state="$(fetch_parameter "$${SSM_PKI_STATE_NAME}")" || true
+    state="$(fetch_parameter "$${VAULT_PKI_STATE_SSM_NAME}")" || true
 
     if [ "$${state}" = "ready" ]; then
       return 0
@@ -850,7 +888,7 @@ wait_for_pki_ready() {
 }
 
 fetch_pki_ca_cert() {
-  fetch_parameter "$${SSM_PKI_CA_CERT_NAME}"
+  fetch_parameter "$${VAULT_PKI_ROOT_CA_CERT_SSM_NAME}"
 }
 
 #######################################
@@ -999,9 +1037,14 @@ main() {
 
   # Enable PKI and TLS
   if [ "$${vault_node_role}" = "bootstrap" ]; then
-    configure_pki_engine
+    configure_pki_root_secrets_engine
+    configure_pki_root_ca
+    configure_pki_root_signing_policy
+    configure_pki_vault_secrets_engine
+    configure_pki_vault_intermediate_ca
+    configure_vault_server_pki_role
     write_vault_server_policy
-    publish_cluster_ca_certificate
+    publish_root_ca_certificate
     enable_aws_auth_method
     bind_vault_server_iam_role
     configure_file_audit_device
