@@ -227,11 +227,11 @@ fetch_bootstrap_ca_cert() {
   fetch_secret "$${BOOTSTRAP_TLS_CA_CERT_SECRET_ARN}"
 }
 
-fetch_bootstrap_server_cert() {
+fetch_bootstrap_tls_cert() {
   fetch_secret "$${BOOTSTRAP_TLS_CERT_SECRET_ARN}"
 }
 
-fetch_bootstrap_server_key() {
+fetch_bootstrap_tls_private_key() {
   fetch_secret "$${BOOTSTRAP_TLS_PRIVATE_KEY_SECRET_ARN}"
 }
 
@@ -622,15 +622,15 @@ EOF
 }
 
 write_bootstrap_tls_materials() {
-  ca_cert="$(fetch_bootstrap_ca_cert)"
-  server_cert="$(fetch_bootstrap_server_cert)"
-  server_key="$(fetch_bootstrap_server_key)"
+  bootstrap_ca_cert="$(fetch_bootstrap_ca_cert)"
+  bootstrap_tls_cert="$(fetch_bootstrap_tls_cert)"
+  bootstrap_tls_private_key="$(fetch_bootstrap_tls_private_key)"
 
   log_info "Writing bootstrap TLS materials"
 
-  printf '%s\n' "$${ca_cert}" >"$${VAULT_TLS_CA_FILE}"
-  printf '%s\n' "$${server_cert}" >"$${VAULT_TLS_CERT_FILE}"
-  printf '%s\n' "$${server_key}" >"$${VAULT_TLS_KEY_FILE}"
+  printf '%s\n' "$${bootstrap_ca_cert}" >"$${VAULT_TLS_CA_FILE}"
+  printf '%s\n' "$${bootstrap_tls_cert}" >"$${VAULT_TLS_CERT_FILE}"
+  printf '%s\n' "$${bootstrap_tls_private_key}" >"$${VAULT_TLS_KEY_FILE}"
 
   chown vault:vault "$${VAULT_TLS_CA_FILE}" "$${VAULT_TLS_CERT_FILE}" "$${VAULT_TLS_KEY_FILE}"
   chmod 0644 "$${VAULT_TLS_CA_FILE}"
