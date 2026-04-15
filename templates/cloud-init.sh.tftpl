@@ -848,7 +848,10 @@ issue_vault_server_certificate() {
   tmp_cert="$${VAULT_TLS_DIR}/server.crt.tmp"
   tmp_key="$${VAULT_TLS_DIR}/server.key.tmp"
 
-  printf '%s\n' "$(printf '%s' "$${cert_json}" | jq -r '.data.certificate')" >"$${tmp_cert}"
+  printf '%s\n%s\n' \
+    "$(printf '%s' "$${cert_json}" | jq -r '.data.certificate')" \
+    "$(printf '%s' "$${cert_json}" | jq -r '.data.ca_chain[]')" \
+    >"$${tmp_cert}"
   printf '%s\n' "$(printf '%s' "$${cert_json}" | jq -r '.data.private_key')" >"$${tmp_key}"
 
   chown vault:vault "$${tmp_cert}" "$${tmp_key}"
