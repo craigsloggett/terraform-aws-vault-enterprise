@@ -33,7 +33,8 @@ output "ec2_ami_name" {
   value       = var.ec2_ami.name
 }
 
-output "vault_bootstrap_tls_ca_cert" {
-  description = "Bootstrap TLS CA certificate"
-  value       = tls_self_signed_cert.vault_bootstrap_tls_ca_cert.cert_pem
+output "vault_tls_ca_bundle" {
+  description = "Vault PKI Managed TLS CA Bundle"
+  value       = aws_ssm_parameter.vault_tls_ca_bundle.value
+  sensitive   = false
 }
