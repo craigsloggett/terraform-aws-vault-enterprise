@@ -708,20 +708,24 @@ configure_pki_root_ca() {
 
   # Configure the pki_root URLs first to embed the AIA
   # fields into the root cert at generation time.
-  vault write pki_root/config/urls \
-    issuing_certificates="https://$${VAULT_FQDN}:8200/v1/pki_root/ca" \
-    crl_distribution_points="https://$${VAULT_FQDN}:8200/v1/pki_root/crl" \
-    ocsp_servers="https://$${VAULT_FQDN}:8200/v1/pki_root/ocsp" \
-    >/dev/null
+  vault write pki_root/config/urls - >/dev/null <<EOF
+{
+  "issuing_certificates": "https://$${VAULT_FQDN}:8200/v1/pki_root/ca",
+  "crl_distribution_points": "https://$${VAULT_FQDN}:8200/v1/pki_root/crl",
+  "ocsp_servers": "https://$${VAULT_FQDN}:8200/v1/pki_root/ocsp"
+}
+EOF
 
-  vault write pki_root/root/generate/internal \
-    common_name="$${CLUSTER_NAME} Root CA" \
-    organization="$${VAULT_PKI_ORGANIZATION}" \
-    country="$${VAULT_PKI_COUNTRY}" \
-    ttl="$${VAULT_PKI_ROOT_CA_TTL}" \
-    key_type=ec \
-    key_bits=384 \
-    >/dev/null
+  vault write pki_root/root/generate/internal - >/dev/null <<EOF
+{
+  "common_name": "$${CLUSTER_NAME} Root CA",
+  "organization": "$${VAULT_PKI_ORGANIZATION}",
+  "country": "$${VAULT_PKI_COUNTRY}",
+  "ttl": "$${VAULT_PKI_ROOT_CA_TTL}",
+  "key_type": "ec",
+  "key_bits": 384
+}
+EOF
 }
 
 configure_pki_vault_secrets_engine() {
@@ -744,18 +748,22 @@ configure_pki_vault_intermediate_ca() {
 
   # Configure the pki_vault URLs first to embed the AIA
   # fields into the root cert at generation time.
-  vault write pki_vault/config/urls \
-    issuing_certificates="https://$${VAULT_FQDN}:8200/v1/pki_vault/ca" \
-    crl_distribution_points="https://$${VAULT_FQDN}:8200/v1/pki_vault/crl" \
-    ocsp_servers="https://$${VAULT_FQDN}:8200/v1/pki_vault/ocsp" \
-    >/dev/null
+  vault write pki_vault/config/urls - >/dev/null <<EOF
+{
+  "issuing_certificates": "https://$${VAULT_FQDN}:8200/v1/pki_vault/ca",
+  "crl_distribution_points": "https://$${VAULT_FQDN}:8200/v1/pki_vault/crl",
+  "ocsp_servers": "https://$${VAULT_FQDN}:8200/v1/pki_vault/ocsp"
+}
+EOF
 
   # Generate CSR from the intermediate mount
-  vault write -format=json pki_vault/intermediate/generate/internal \
-    common_name="$${CLUSTER_NAME} Vault Intermediate CA" \
-    key_type=ec \
-    key_bits=384 |
-    jq -r '.data.csr' >"$${tmp_dir}/pki_vault_intermediate.csr"
+  vault write -format=json pki_vault/intermediate/generate/internal - <<EOF | jq -r '.data.csr' >"$${tmp_dir}/pki_vault_intermediate.csr"
+{
+  "common_name": "$${CLUSTER_NAME} Vault Intermediate CA",
+  "key_type": "ec",
+  "key_bits": 384
+}
+EOF
 
   # Sign the CSR with the root CA
   vault write -format=json pki_root/root/sign-intermediate \
@@ -778,17 +786,19 @@ configure_pki_vault_intermediate_ca() {
 configure_vault_server_pki_role() {
   log_info "Creating vault-server PKI role"
 
-  vault write pki_vault/roles/vault-server \
-    allowed_domains="$${VAULT_FQDN}" \
-    allow_bare_domains=true \
-    allow_subdomains=false \
-    allow_localhost=false \
-    allow_ip_sans=false \
-    max_ttl="$${VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL}" \
-    key_type=ec \
-    key_bits=384 \
-    ext_key_usage=serverAuth \
-    >/dev/null
+  vault write pki_vault/roles/vault-server - >/dev/null <<EOF
+{
+  "allowed_domains": "$${VAULT_FQDN}",
+  "allow_bare_domains": true,
+  "allow_subdomains": false,
+  "allow_localhost": false,
+  "allow_ip_sans": false,
+  "max_ttl": "$${VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL}",
+  "key_type": "ec",
+  "key_bits": 384,
+  "ext_key_usage": ["serverAuth"]
+}
+EOF
 
   log_info "vault-server PKI role created"
 }
@@ -861,9 +871,12 @@ issue_vault_server_certificate() {
 
   log_info "Requesting certificate from PKI engine"
   cert_json="$(
-    vault write -format=json pki_vault/issue/vault-server \
-      common_name="$${VAULT_FQDN}" \
-      ttl="$${VAULT_PKI_SERVER_CERT_TTL}"
+    vault write -format=json pki_vault/issue/vault-server - <<EOF
+{
+  "common_name": "$${VAULT_FQDN}",
+  "ttl": "$${VAULT_PKI_SERVER_CERT_TTL}"
+}
+EOF
   )"
 
   tmp_cert="$${VAULT_TLS_DIR}/server.crt.tmp"
@@ -928,13 +941,15 @@ enable_aws_auth_method() {
 bind_vault_server_iam_role() {
   log_info "Binding vault-server IAM role"
 
-  vault write auth/aws/role/vault-server \
-    auth_type=iam \
-    bound_iam_principal_arn="$${VAULT_IAM_ROLE_ARN}" \
-    policies=vault-server \
-    max_ttl="$${VAULT_AWS_AUTH_ROLE_MAX_TTL}" \
-    ttl="$${VAULT_AWS_AUTH_ROLE_TTL}" \
-    >/dev/null
+  vault write auth/aws/role/vault-server - >/dev/null <<EOF
+{
+  "auth_type": "iam",
+  "bound_iam_principal_arn": "$${VAULT_IAM_ROLE_ARN}",
+  "policies": "vault-server",
+  "max_ttl": "$${VAULT_AWS_AUTH_ROLE_MAX_TTL}",
+  "ttl": "$${VAULT_AWS_AUTH_ROLE_TTL}"
+}
+EOF
 }
 
 #######################################
