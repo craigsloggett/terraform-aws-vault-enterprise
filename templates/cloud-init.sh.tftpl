@@ -81,7 +81,7 @@ readonly VAULT_AWS_AUTH_ROLE_TTL="4h"
 
 # HCP Terraform JWT Auth
 readonly HCP_TERRAFORM_HOSTNAME="${hcp_terraform_hostname}"
-readonly HCP_TERRAFORM_ORG_NAME="${hcp_terraform_org_name}"
+readonly HCP_TERRAFORM_ORGANIZATION_NAME="${hcp_terraform_organization_name}"
 readonly HCP_TERRAFORM_WORKSPACE_ID="${hcp_terraform_workspace_id}"
 readonly HCP_TERRAFORM_OIDC_DISCOVERY_CA_PEM="${hcp_terraform_oidc_discovery_ca_pem}"
 readonly VAULT_JWT_AUTH_ROLE_TTL="1h"
@@ -980,7 +980,7 @@ bind_admin_jwt_role() {
     bound_audiences="vault.workload.identity" \
     bound_claims_type="string" \
     bound_claims="{
-      \"terraform_organization_name\": \"$${HCP_TERRAFORM_ORG_NAME}\",
+      \"terraform_organization_name\": \"$${HCP_TERRAFORM_ORGANIZATION_NAME}\",
       \"terraform_workspace_id\": \"$${HCP_TERRAFORM_WORKSPACE_ID}\"
     }" \
     user_claim="sub" \

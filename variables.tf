@@ -33,7 +33,7 @@ variable "hcp_terraform" {
   description = "HCP Terraform JWT auth configuration for Terraform-managed Vault administration."
   type = object({
     hostname              = optional(string, "app.terraform.io")
-    org_name              = string
+    organization_name     = string
     workspace_id          = string
     oidc_discovery_ca_pem = optional(string, "")
   })

@@ -85,7 +85,7 @@ resource "aws_launch_template" "vault" {
 
     # HCP Terraform JWT Auth
     hcp_terraform_hostname              = var.hcp_terraform.hostname
-    hcp_terraform_org_name              = var.hcp_terraform.org_name
+    hcp_terraform_organization_name     = var.hcp_terraform.organization_name
     hcp_terraform_workspace_id          = var.hcp_terraform.workspace_id
     hcp_terraform_oidc_discovery_ca_pem = var.hcp_terraform.oidc_discovery_ca_pem
 
