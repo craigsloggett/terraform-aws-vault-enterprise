@@ -55,6 +55,8 @@ resource "aws_launch_template" "vault" {
     config_vault_service          = local.config_vault_service
     config_vault_service_override = local.config_vault_service_override
     config_vault_hcl              = local.config_vault_hcl
+    config_vault_server_policy    = local.config_vault_server_policy
+    config_vault_admin_policy     = local.config_vault_admin_policy
 
     # Bootstrap Artifacts
     vault_enterprise_license_secret_arn  = aws_secretsmanager_secret.vault_enterprise_license.arn
@@ -80,6 +82,12 @@ resource "aws_launch_template" "vault" {
 
     # AWS Auth
     vault_iam_role_arn = aws_iam_role.vault.arn
+
+    # HCP Terraform JWT Auth
+    hcp_terraform_hostname              = var.hcp_terraform.hostname
+    hcp_terraform_organization_name     = var.hcp_terraform.organization_name
+    hcp_terraform_workspace_id          = var.hcp_terraform.workspace_id
+    hcp_terraform_oidc_discovery_ca_pem = var.hcp_terraform.oidc_discovery_ca_pem
 
     # Vault Agent
     config_agent_hcl                     = local.config_agent_hcl
