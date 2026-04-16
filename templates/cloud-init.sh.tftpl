@@ -203,7 +203,7 @@ put_parameter() {
 get_vault_node_role() {
   cluster_state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" 2>/dev/null)" || cluster_state=""
 
-  if [ "$${cluster_state}" = "ready" ]; then
+  if [ "$${cluster_state}" = "Ready" ]; then
     printf 'follower'
   else
     if is_bootstrap_node; then
@@ -274,8 +274,8 @@ initialize_vault_cluster() {
   log_info "Storing recovery keys in Secrets Manager"
   put_secret "$${VAULT_RECOVERY_KEYS_SECRET_ARN}" "$${recovery_keys}"
 
-  log_info "Writing cluster state: ready"
-  put_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" "ready"
+  log_info "Writing cluster state: Ready"
+  put_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" "Ready"
 
   log_info "Cluster initialization complete"
 }
@@ -284,7 +284,7 @@ join_cluster() {
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}")" || true
 
-    if [ "$${state}" = "ready" ]; then
+    if [ "$${state}" = "Ready" ]; then
       return 0
     fi
 
@@ -305,9 +305,9 @@ publish_tls_ca_bundle() {
 }
 
 mark_pki_ready() {
-  log_info "Writing PKI state: ready"
+  log_info "Writing PKI state: Ready"
 
-  put_parameter "$${VAULT_PKI_STATE_SSM_NAME}" "ready"
+  put_parameter "$${VAULT_PKI_STATE_SSM_NAME}" "Ready"
 }
 
 #######################################
@@ -910,7 +910,7 @@ wait_for_pki_ready() {
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     state="$(fetch_parameter "$${VAULT_PKI_STATE_SSM_NAME}")" || true
 
-    if [ "$${state}" = "ready" ]; then
+    if [ "$${state}" = "Ready" ]; then
       return 0
     fi
     sleep 5
