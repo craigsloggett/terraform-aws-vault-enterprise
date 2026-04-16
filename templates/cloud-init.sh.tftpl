@@ -945,6 +945,8 @@ reload_vault_listener() {
 }
 
 wait_for_pki_ready() {
+  log_info "Waiting for the bootstrap node to finish PKI setup"
+
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     state="$(fetch_parameter "$${VAULT_PKI_STATE_SSM_NAME}")" || true
 
