@@ -530,22 +530,20 @@ download_and_verify_vault() {
 }
 
 install_vault() {
-
   log_info "Installing Vault Enterprise $${VAULT_VERSION}"
+  tmp_dir="$(mktemp -d)"
 
   arch="$(detect_system_architecture)"
-  log_info "Detected architecture: $${arch}"
-
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$${tmp_dir}"' EXIT
-
   download_and_verify_vault "$${VAULT_VERSION}" "$${arch}" "$${tmp_dir}"
 
   unzip -o -q "$${tmp_dir}/vault_$${VAULT_VERSION}_linux_$${arch}.zip" -d "$${tmp_dir}"
   mv "$${tmp_dir}/vault" /usr/bin/vault
+
   chown root:root /usr/bin/vault
   chmod 0755 /usr/bin/vault
+
   ln -sf /usr/bin/vault /usr/local/bin/vault
+  rm -rf "$${tmp_dir}"
 
   log_info "Vault Enterprise $${VAULT_VERSION} installed"
 }
