@@ -936,8 +936,6 @@ bind_vault_server_iam_role() {
     max_ttl="$${VAULT_AWS_AUTH_ROLE_MAX_TTL}" \
     ttl="$${VAULT_AWS_AUTH_ROLE_TTL}" \
     >/dev/null
-
-  log_info "vault-server IAM role bound"
 }
 
 #######################################
@@ -950,8 +948,6 @@ enable_jwt_auth_method() {
   if ! vault auth list -format=json | jq -e '."jwt/"' >/dev/null 2>&1; then
     vault auth enable jwt
   fi
-
-  log_info "Vault JWT auth method enabled"
 }
 
 configure_jwt_auth_method() {
@@ -961,8 +957,6 @@ configure_jwt_auth_method() {
     oidc_discovery_url="https://$${HCP_TERRAFORM_HOSTNAME}" \
     bound_issuer="https://$${HCP_TERRAFORM_HOSTNAME}" \
     >/dev/null
-
-  log_info "JWT auth method configured"
 }
 
 bind_admin_jwt_role() {
@@ -982,8 +976,6 @@ bind_admin_jwt_role() {
     ttl="$${VAULT_JWT_AUTH_ROLE_TTL}" \
     max_ttl="$${VAULT_JWT_AUTH_ROLE_MAX_TTL}" \
     >/dev/null
-
-  log_info "terraform-admin JWT role bound"
 }
 
 #######################################
@@ -1011,8 +1003,6 @@ start_vault_agent() {
 
   systemctl daemon-reload
   systemctl enable --now vault-agent
-
-  log_info "Vault Agent started"
 }
 
 write_vault_agent_reload_rules() {
