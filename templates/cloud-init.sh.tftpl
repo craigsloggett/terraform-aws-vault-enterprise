@@ -638,7 +638,7 @@ wait_for_vault_unsealed() {
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     vault status -format=json 2>"$${tmp_err}"
 
-    vault_status_exit_code="${?}"
+    vault_status_exit_code="$?"
     vault_status_error_message="$(cat "$${tmp_err}")"
 
     case "$${vault_status_exit_code}" in
