@@ -206,8 +206,14 @@ write_vault_bootstrap_tls_materials() {
       ;;
     Ready)
       if [ "$${pki_state}" = "Ready" ]; then
-        log_info "PKI state is Ready: Writing PKI TLS CA file"
-        printf '%s\n' "$(fetch_tls_ca_bundle)" >"$${VAULT_TLS_CA_FILE}"
+        log_info "PKI state is Ready: Writing combined PKI and bootstrap TLS CA bundle"
+        # PKI CA for outbound connections to existing nodes, bootstrap CA for local
+        # vault CLI calls until reload_vault_listener replaces the bootstrap cert
+        # with a PKI-signed one.
+        printf '%s\n%s\n' \
+          "$(fetch_tls_ca_bundle)" \
+          "$(fetch_bootstrap_ca_cert)" \
+          >"$${VAULT_TLS_CA_FILE}"
       else
         log_info "Writing bootstrap TLS CA file"
         printf '%s\n' "$(fetch_bootstrap_ca_cert)" >"$${VAULT_TLS_CA_FILE}"
@@ -309,13 +315,14 @@ initialize_vault_cluster() {
 }
 
 join_cluster() {
+  log_info "Joining the Vault cluster"
+
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}")" || true
-
     if [ "$${state}" = "Ready" ]; then
       return 0
     fi
-
+    log_info "Cluster is not initialized, waiting"
     sleep 5
   done
 
@@ -602,16 +609,11 @@ start_vault() {
 
   systemctl daemon-reload
   systemctl enable --now vault
-
-  log_info "Vault started"
 }
 
 wait_for_vault_api() {
-  # Uses curl -k to skip TLS verification to handle the case
-  # when PKI was configured prior to this node coming online
-  # and the CA bundle on disk is the PKI CA bundle, not the
-  # bootstrap CA certificate (but the TLS certificate and
-  # private key are still the bootstrap materials).
+  log_info "Waiting for the Vault API to be ready"
+
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     status="$(
       curl -sk -o /dev/null -w '%%{http_code}' \
@@ -629,11 +631,29 @@ wait_for_vault_api() {
 }
 
 wait_for_vault_unsealed() {
+  log_info "Waiting for the Vault cluster to be unsealed"
+
+  tmp_err="$(mktemp)"
+
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    sealed="$(vault status -format=json 2>/dev/null | jq -r '.sealed')" || true
-    if [ "$${sealed}" = "false" ]; then
-      return 0
-    fi
+    vault status -format=json 2>"$${tmp_err}"
+
+    vault_status_exit_code="${?}"
+    vault_status_error_message="$(cat "$${tmp_err}")"
+
+    case "$${vault_status_exit_code}" in
+      0)
+        rm -f "$${tmp_err}"
+        return 0
+        ;;
+      2)
+        : # Sealed, keep waiting
+        ;;
+      *)
+        log_warn "Vault returned an error when querying status:"
+        log_warn "$${vault_status_error_message}"
+        ;;
+    esac
     sleep 20
   done
 
