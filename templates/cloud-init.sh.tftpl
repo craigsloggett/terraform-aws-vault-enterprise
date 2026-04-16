@@ -969,7 +969,9 @@ configure_jwt_auth_method() {
     $${ca_pem_arg} \
     >/dev/null
 
-  [ -n "$${tmp_ca_pem:-}" ] && rm -f "$${tmp_ca_pem}"
+  if [ -n "$${tmp_ca_pem:-}" ]; then
+    rm -f "$${tmp_ca_pem}"
+  fi
 }
 
 bind_admin_jwt_role() {
