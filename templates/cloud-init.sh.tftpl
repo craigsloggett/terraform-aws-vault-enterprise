@@ -1131,13 +1131,15 @@ main() {
     configure_pki_vault_intermediate_ca
     configure_vault_server_pki_role
     write_vault_server_policy
-    write_admin_policy
+    if [ -n "$${HCP_TERRAFORM_ORGANIZATION_NAME}" ]; then
+      write_admin_policy
+      enable_jwt_auth_method
+      configure_jwt_auth_method
+      bind_admin_jwt_role
+    fi
     publish_tls_ca_bundle
     enable_aws_auth_method
     bind_vault_server_iam_role
-    enable_jwt_auth_method
-    configure_jwt_auth_method
-    bind_admin_jwt_role
     configure_file_audit_device
     mark_pki_ready
   else

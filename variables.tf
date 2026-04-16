@@ -30,11 +30,12 @@ variable "ec2_key_pair_name" {
 }
 
 variable "hcp_terraform" {
-  description = "HCP Terraform JWT auth configuration for Terraform-managed Vault administration."
+  description = "HCP Terraform JWT auth configuration for Terraform-managed Vault administration. JWT is not configured if this is not provided."
+  default     = {}
   type = object({
     hostname              = optional(string, "app.terraform.io")
-    organization_name     = string
-    workspace_id          = string
+    organization_name     = optional(string, "")
+    workspace_id          = optional(string, "")
     oidc_discovery_ca_pem = optional(string, "")
   })
 }
