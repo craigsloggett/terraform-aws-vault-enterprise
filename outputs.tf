@@ -3,6 +3,11 @@ output "vault_url" {
   value       = "https://${local.vault_fqdn}"
 }
 
+output "vault_version" {
+  description = "Vault Enterprise version deployed."
+  value       = var.vault_version
+}
+
 output "bastion_public_ip" {
   description = "Public IP of the bastion host."
   value       = aws_instance.bastion.public_ip
