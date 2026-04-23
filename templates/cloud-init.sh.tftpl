@@ -779,7 +779,8 @@ EOF
 
   # Generate the intermediate CSR inside Vault (private key never leaves)
   log_info "Generating intermediate CSR"
-  csr_pem="$(vault write -format=json pki_vault/intermediate/generate/internal - <<EOF | jq -r '.data.csr'
+  csr_pem="$(
+    vault write -format=json pki_vault/intermediate/generate/internal - <<EOF | jq -r '.data.csr'
 {
   "common_name": "$${VAULT_INTERMEDIATE_CA_COMMON_NAME}",
   "key_type": "$${VAULT_INTERMEDIATE_CA_KEY_TYPE}",
