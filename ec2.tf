@@ -77,7 +77,7 @@ resource "aws_launch_template" "vault" {
     cluster_name                             = title(var.project_name)
     vault_pki_state_ssm_name                 = aws_ssm_parameter.vault_pki_state.name
     vault_tls_ca_bundle_ssm_name             = aws_ssm_parameter.vault_tls_ca_bundle.name
-    intermediate_ca_secret_arn               = var.intermediate_ca_secret_arn
+    intermediate_ca_secret_arn               = aws_secretsmanager_secret.vault_intermediate_ca.arn
     csr_ssm_parameter_name                   = local.intermediate_csr_ssm_name
     signed_intermediate_wait_timeout_seconds = var.signed_intermediate_wait_timeout_seconds
 

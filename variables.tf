@@ -231,27 +231,6 @@ variable "vault_snapshot_retain" {
 
 # PKI
 
-variable "intermediate_ca_secret_arn" {
-  type        = string
-  description = "ARN of the Secrets Manager secret where the external signer writes the signed intermediate CA certificate and chain as JSON: {\"certificate\": \"<PEM>\", \"ca_chain\": \"<PEM>\"}."
-
-  validation {
-    condition     = can(regex("^arn:aws[a-zA-Z-]*:secretsmanager:", var.intermediate_ca_secret_arn))
-    error_message = "Must be a valid Secrets Manager secret ARN."
-  }
-}
-
-variable "intermediate_ca_secret_kms_key_arn" {
-  type        = string
-  description = "ARN of the KMS key used to encrypt the intermediate CA Secrets Manager secret. Required only when the secret uses a customer-managed KMS key."
-  default     = null
-
-  validation {
-    condition     = var.intermediate_ca_secret_kms_key_arn == null || can(regex("^arn:aws[a-zA-Z-]*:kms:", var.intermediate_ca_secret_kms_key_arn))
-    error_message = "Must be a valid KMS key ARN."
-  }
-}
-
 variable "signed_intermediate_wait_timeout_seconds" {
   type        = number
   description = "Maximum seconds the bootstrap node waits for the signed intermediate certificate to appear in Secrets Manager."

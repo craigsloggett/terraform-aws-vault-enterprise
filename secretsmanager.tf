@@ -10,6 +10,13 @@ resource "aws_secretsmanager_secret_version" "vault_enterprise_license" {
   secret_string = var.vault_enterprise_license
 }
 
+resource "aws_secretsmanager_secret" "vault_intermediate_ca" {
+  name_prefix = "${var.project_name}-vault-intermediate-ca-"
+  description = "Signed intermediate CA certificate and chain for Vault PKI"
+
+  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-intermediate-ca" })
+}
+
 resource "aws_secretsmanager_secret" "vault_recovery_keys" {
   name_prefix = "${var.project_name}-vault-recovery-keys-"
   description = "Vault Recovery Keys"

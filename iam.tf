@@ -164,7 +164,7 @@ data "aws_iam_policy_document" "vault_intermediate_ca" {
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret",
     ]
-    resources = [var.intermediate_ca_secret_arn]
+    resources = [aws_secretsmanager_secret.vault_intermediate_ca.arn]
   }
 }
 
@@ -172,25 +172,6 @@ resource "aws_iam_role_policy" "vault_intermediate_ca" {
   name_prefix = "${var.project_name}-intermediate-ca-"
   role        = aws_iam_role.vault.id
   policy      = data.aws_iam_policy_document.vault_intermediate_ca.json
-}
-
-data "aws_iam_policy_document" "vault_intermediate_ca_kms" {
-  count = var.intermediate_ca_secret_kms_key_arn != null ? 1 : 0
-
-  statement {
-    sid       = "IntermediateCAKMSDecrypt"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt"]
-    resources = [var.intermediate_ca_secret_kms_key_arn]
-  }
-}
-
-resource "aws_iam_role_policy" "vault_intermediate_ca_kms" {
-  count = var.intermediate_ca_secret_kms_key_arn != null ? 1 : 0
-
-  name_prefix = "${var.project_name}-intermediate-ca-kms-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_intermediate_ca_kms[0].json
 }
 
 data "aws_iam_policy_document" "vault_iam_read" {

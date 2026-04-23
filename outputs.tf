@@ -65,5 +65,5 @@ output "intermediate_csr_ssm_parameter_name" {
 
 output "intermediate_ca_secret_arn" {
   description = "Secrets Manager ARN for the signed intermediate CA certificate."
-  value       = var.intermediate_ca_secret_arn
+  value       = aws_secretsmanager_secret.vault_intermediate_ca.arn
 }
