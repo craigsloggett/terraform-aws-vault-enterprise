@@ -70,6 +70,9 @@ readonly VAULT_PKI_SERVER_CERT_TTL="24h"
 readonly VAULT_PKI_STATE_SSM_NAME="${vault_pki_state_ssm_name}"
 readonly VAULT_TLS_CA_BUNDLE_SSM_NAME="${vault_tls_ca_bundle_ssm_name}"
 readonly VAULT_INTERMEDIATE_CA_SECRET_ARN="${intermediate_ca_secret_arn}"
+readonly VAULT_INTERMEDIATE_CA_COMMON_NAME="${intermediate_ca_common_name}"
+readonly VAULT_INTERMEDIATE_CA_KEY_TYPE="${intermediate_ca_key_type}"
+readonly VAULT_INTERMEDIATE_CA_KEY_BITS="${intermediate_ca_key_bits}"
 readonly VAULT_INTERMEDIATE_CSR_SSM_NAME="${csr_ssm_parameter_name}"
 readonly VAULT_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS="${signed_intermediate_wait_timeout_seconds}"
 
@@ -778,9 +781,9 @@ EOF
   log_info "Generating intermediate CSR"
   csr_pem="$(vault write -format=json pki_vault/intermediate/generate/internal - <<EOF | jq -r '.data.csr'
 {
-  "common_name": "$${CLUSTER_NAME} Vault Intermediate CA",
-  "key_type": "ec",
-  "key_bits": 384
+  "common_name": "$${VAULT_INTERMEDIATE_CA_COMMON_NAME}",
+  "key_type": "$${VAULT_INTERMEDIATE_CA_KEY_TYPE}",
+  "key_bits": $${VAULT_INTERMEDIATE_CA_KEY_BITS}
 }
 EOF
   )"

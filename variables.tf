@@ -231,6 +231,31 @@ variable "vault_snapshot_retain" {
 
 # PKI
 
+variable "vault_pki_intermediate_ca" {
+  description = "Configuration for the Vault PKI intermediate CA certificate."
+  default     = {}
+  type = object({
+    common_name = optional(string, "Vault Intermediate CA")
+    key_type    = optional(string, "ec")
+    key_bits    = optional(number, 384)
+  })
+
+  validation {
+    condition     = contains(["ec", "rsa"], var.vault_pki_intermediate_ca.key_type)
+    error_message = "key_type must be \"ec\" or \"rsa\"."
+  }
+
+  validation {
+    condition     = var.vault_pki_intermediate_ca.key_type != "ec" || contains([384, 521], var.vault_pki_intermediate_ca.key_bits)
+    error_message = "key_bits for ec must be 384 or 521."
+  }
+
+  validation {
+    condition     = var.vault_pki_intermediate_ca.key_type != "rsa" || contains([4096, 8192], var.vault_pki_intermediate_ca.key_bits)
+    error_message = "key_bits for rsa must be 4096 or 8192."
+  }
+}
+
 variable "signed_intermediate_wait_timeout_seconds" {
   type        = number
   description = "Maximum seconds the bootstrap node waits for the signed intermediate certificate to appear in Secrets Manager."
