@@ -825,7 +825,7 @@ EOF
   imported_issuer_id="$(
     vault write -format=json pki_vault/intermediate/set-signed \
       certificate=@"$${tmp_dir}/pki_vault_intermediate_bundle.pem" \
-    | jq -r '.data.imported_issuers[0]'
+    | jq -r '.data.mapping | to_entries[] | select(.value != "") | .key'
   )"
 
   rm -rf "$${tmp_dir}"
