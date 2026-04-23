@@ -822,12 +822,19 @@ EOF
 
   # Import the signed certificate and full chain into the intermediate mount
   printf '%s\n%s\n' "$${signed_cert}" "$${ca_chain}" >"$${tmp_dir}/pki_vault_intermediate_bundle.pem"
-  vault write pki_vault/intermediate/set-signed \
-    certificate=@"$${tmp_dir}/pki_vault_intermediate_bundle.pem" \
-    >/dev/null
+  imported_issuer_id="$(
+    vault write -format=json pki_vault/intermediate/set-signed \
+      certificate=@"$${tmp_dir}/pki_vault_intermediate_bundle.pem" \
+    | jq -r '.data.imported_issuers[0]'
+  )"
 
   rm -rf "$${tmp_dir}"
   trap - EXIT
+
+  # Set the imported issuer as the default so cert/ca and issue endpoints work
+  vault write pki_vault/config/issuers \
+    default="$${imported_issuer_id}" \
+    >/dev/null
 
   log_info "Intermediate CA signed and imported"
 }
