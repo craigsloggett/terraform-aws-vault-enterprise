@@ -64,6 +64,6 @@ output "vault_pki_intermediate_ca_csr_ssm_parameter_name" {
 }
 
 output "vault_pki_intermediate_ca_signed_csr_secret_arn" {
-  description = "Secrets Manager ARN for the signed intermediate CA certificate."
+  description = "Secrets Manager ARN for the signed CSR and root CA PEM."
   value       = aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn
 }
