@@ -65,7 +65,7 @@ resource "tls_locally_signed_cert" "vault_bootstrap_tls_cert" {
 
 resource "aws_secretsmanager_secret" "vault_bootstrap_tls_ca_cert" {
   name_prefix = "${var.project_name}-vault-bootstrap-tls-ca-cert-"
-  description = "Bootstrap TLS CA certificate"
+  description = "Bootstrap TLS CA Certificate"
 
   tags = merge(var.common_tags, { Name = "${var.project_name}-vault-bootstrap-tls-ca-cert" })
 }
