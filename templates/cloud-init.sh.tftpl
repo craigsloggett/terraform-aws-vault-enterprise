@@ -957,7 +957,8 @@ write_vault_pki_ca_bundle() (
   fi
 )
 
-issue_vault_pki_tls_certificate_and_key() {
+issue_vault_pki_tls_certificate_and_key() (
+  set -euf
   log_info "Issuing PKI TLS certificate and private key for this node"
 
   # Follower nodes need to fetch the new CA bundle from SSM and authenticate
@@ -1010,7 +1011,7 @@ EOF
 
   log_info "PKI TLS certificate written to $${VAULT_TLS_CERT_FILE}"
   log_info "PKI TLS private key written to $${VAULT_TLS_KEY_FILE}"
-}
+)
 
 reload_vault_listener() (
   set -euf
@@ -1124,7 +1125,7 @@ write_jwt_auth_config() (
   vault write "auth/$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}/config" \
     "oidc_discovery_url=https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
     "bound_issuer=https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
-    "$$@" \
+    "$${@}" \
     >/dev/null
 )
 
