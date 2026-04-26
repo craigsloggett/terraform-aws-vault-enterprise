@@ -102,52 +102,61 @@ readonly VAULT_JWT_AUTH_ROLE_MAX_TTL="2h"
 #           Logging Helpers           #
 #######################################
 
-log_info() {
+log_info() (
+  set -euf
   printf '[INFO]  %s\n' "$${1}"
-}
+)
 
-log_warn() {
+log_warn() (
+  set -euf
   printf '[WARN]  %s\n' "$${1}" >&2
-}
+)
 
-log_error() {
+log_error() (
+  set -euf
   printf '[ERROR] %s\n' "$${1}" >&2
-}
+)
 
 #######################################
 #        EC2 Metadata Helpers         #
 #######################################
 
-get_imds_token() {
+get_imds_token() (
+  set -euf
   curl -s -X PUT \
     -H "X-aws-ec2-metadata-token-ttl-seconds: 3600" \
     "http://169.254.169.254/latest/api/token"
-}
+)
 
-get_imds_metadata() {
+get_imds_metadata() (
+  set -euf
   path="$${1}"
   token="$(get_imds_token)"
   curl -s -H "X-aws-ec2-metadata-token: $${token}" \
     "http://169.254.169.254/latest/meta-data/$${path}"
-}
+)
 
-get_private_ip() {
+get_private_ip() (
+  set -euf
   get_imds_metadata "local-ipv4"
-}
+)
 
-get_instance_id() {
+get_instance_id() (
+  set -euf
   get_imds_metadata "instance-id"
-}
+)
 
-get_availability_zone() {
+get_availability_zone() (
+  set -euf
   get_imds_metadata "placement/availability-zone"
-}
+)
 
 #######################################
 #     AWS Secrets Manager Helpers     #
 #######################################
 
-fetch_secret() {
+fetch_secret() (
+  set -euf
   secret_arn="$${1}"
 
   for attempt in 1 2 3 4 5; do
@@ -162,9 +171,10 @@ fetch_secret() {
 
   log_error "Failed to retrieve secret after $${attempt} attempts, failing bootstrap"
   return 1
-}
+)
 
-put_secret() {
+put_secret() (
+  set -euf
   secret_arn="$${1}"
   secret_value="$${2}"
 
@@ -172,22 +182,24 @@ put_secret() {
     --secret-id "$${secret_arn}" \
     --secret-string "$${secret_value}" \
     >/dev/null
-}
+)
 
 #######################################
 #   AWS SSM Parameter Store Helpers   #
 #######################################
 
-fetch_parameter() {
+fetch_parameter() (
+  set -euf
   parameter_name="$${1}"
 
   aws ssm get-parameter \
     --name "$${parameter_name}" \
     --query "Parameter.Value" \
     --output text
-}
+)
 
-put_parameter() {
+put_parameter() (
+  set -euf
   parameter_name="$${1}"
   parameter_value="$${2}"
 
@@ -197,13 +209,14 @@ put_parameter() {
     --type String \
     --overwrite \
     >/dev/null
-}
+)
 
 #######################################
 #   Vault Cluster Discovery Helpers   #
 #######################################
 
-write_vault_bootstrap_tls_materials() {
+write_vault_bootstrap_tls_materials() (
+  set -euf
   cluster_state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" 2>/dev/null)" || cluster_state=""
   pki_state="$(fetch_parameter "$${VAULT_PKI_STATE_SSM_NAME}" 2>/dev/null)" || pki_state=""
 
@@ -211,7 +224,7 @@ write_vault_bootstrap_tls_materials() {
     "" | Uninitialized)
       if [ "$${pki_state}" = "Ready" ]; then
         log_error "Corrupt SSM state: pki/state=Ready but cluster/state=Uninitialized"
-        exit 1
+        return 1
       fi
       log_info "Writing bootstrap TLS CA file"
       fetch_bootstrap_ca >"$${VAULT_TLS_CA_FILE}"
@@ -233,7 +246,7 @@ write_vault_bootstrap_tls_materials() {
       ;;
     *)
       log_error "Unsupported cluster state: '$${cluster_state}'"
-      exit 1
+      return 1
       ;;
   esac
 
@@ -244,9 +257,10 @@ write_vault_bootstrap_tls_materials() {
   chown vault:vault "$${VAULT_TLS_CA_FILE}" "$${VAULT_TLS_CERT_FILE}" "$${VAULT_TLS_KEY_FILE}"
   chmod 0644 "$${VAULT_TLS_CA_FILE}"
   chmod 0640 "$${VAULT_TLS_CERT_FILE}" "$${VAULT_TLS_KEY_FILE}"
-}
+)
 
-get_vault_node_role() {
+get_vault_node_role() (
+  set -euf
   cluster_state="$(fetch_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" 2>/dev/null)" || cluster_state=""
 
   if [ "$${cluster_state}" = "Ready" ]; then
@@ -258,9 +272,10 @@ get_vault_node_role() {
       printf 'follower'
     fi
   fi
-}
+)
 
-is_bootstrap_node() {
+is_bootstrap_node() (
+  set -euf
   instance_id="$(get_instance_id)"
 
   # Fetch all running instance IDs in this cluster by tag.
@@ -276,29 +291,34 @@ is_bootstrap_node() {
   lowest_id="$(printf '%s' "$${all_ids}" | tr '\t' '\n' | sort | head -1)"
 
   [ "$${instance_id}" = "$${lowest_id}" ]
-}
+)
 
-fetch_bootstrap_ca() {
+fetch_bootstrap_ca() (
+  set -euf
   fetch_secret "$${BOOTSTRAP_TLS_CA_SECRET_ARN}"
-}
+)
 
-fetch_bootstrap_tls_cert() {
+fetch_bootstrap_tls_cert() (
+  set -euf
   fetch_secret "$${BOOTSTRAP_TLS_CERT_SECRET_ARN}"
-}
+)
 
-fetch_bootstrap_tls_private_key() {
+fetch_bootstrap_tls_private_key() (
+  set -euf
   fetch_secret "$${BOOTSTRAP_TLS_PRIVATE_KEY_SECRET_ARN}"
-}
+)
 
-fetch_vault_license() {
+fetch_vault_license() (
+  set -euf
   fetch_secret "$${VAULT_ENTERPRISE_LICENSE_SECRET_ARN}"
-}
+)
 
 #######################################
 #    Cluster Coordination Helpers     #
 #######################################
 
-initialize_vault_cluster() {
+initialize_vault_cluster() (
+  set -euf
   log_info "Initializing Vault cluster"
 
   if vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null; then
@@ -329,9 +349,10 @@ initialize_vault_cluster() {
   put_parameter "$${VAULT_CLUSTER_STATE_SSM_NAME}" "Ready"
 
   log_info "Cluster initialization complete"
-}
+)
 
-join_cluster() {
+join_cluster() (
+  set -euf
   log_info "Joining the Vault cluster"
 
   # 60 attempts x 10s = 10 minutes.
@@ -352,27 +373,30 @@ join_cluster() {
 
   log_error "Unable to join the Vault cluster after $${max_attempts} attempts, failing bootstrap"
   return 1
-}
+)
 
-publish_tls_ca_bundle() {
+publish_tls_ca_bundle() (
+  set -euf
   log_info "Publishing PKI managed TLS CA bundle to SSM"
 
   vault_pki_intermediate_ca_cert="$(vault read -field=certificate pki_vault/cert/ca)"
   tls_ca_bundle="$(printf '%s\n%s\n' "$${vault_pki_intermediate_ca_cert}" "$${VAULT_PKI_INTERMEDIATE_CA_CHAIN}")"
   put_parameter "$${VAULT_TLS_CA_BUNDLE_SSM_NAME}" "$${tls_ca_bundle}"
-}
+)
 
-mark_pki_ready() {
+mark_pki_ready() (
+  set -euf
   log_info "Writing PKI state: Ready"
 
   put_parameter "$${VAULT_PKI_STATE_SSM_NAME}" "Ready"
-}
+)
 
 #######################################
 #     Configure Host EBS Volumes      #
 #######################################
 
-resolve_ebs_nvme_device() {
+resolve_ebs_nvme_device() (
+  set -euf
   target_name="$${1}"
 
   target_short="$${target_name#/dev/}"
@@ -394,9 +418,10 @@ resolve_ebs_nvme_device() {
   set -f
 
   return 1
-}
+)
 
-prepare_disk() {
+prepare_disk() (
+  set -euf
   device_attachment_name="$${1}"
   mount_point="$${2}"
   fs_label="$${3}"
@@ -441,13 +466,14 @@ prepare_disk() {
       >>/etc/fstab
     log_info "Added fstab entry for UUID=$${uuid}"
   fi
-}
+)
 
 #######################################
 #        Configure Host System        #
 #######################################
 
-wait_for_network() {
+wait_for_network() (
+  set -euf
   for attempt in 1 2 3 4 5; do
     if ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
       return 0
@@ -457,9 +483,10 @@ wait_for_network() {
 
   log_error "Network was not available after $${attempt} attempts, failing bootstrap"
   return 1
-}
+)
 
-prepare_system() {
+prepare_system() (
+  set -euf
   log_info "Preparing system packages"
 
   export DEBIAN_FRONTEND=noninteractive
@@ -467,9 +494,10 @@ prepare_system() {
   apt-get -yq update >/dev/null
   apt-get -yq install \
     awscli gnupg jq unzip nvme-cli amazon-ec2-utils chrony >/dev/null
-}
+)
 
-configure_system_time() {
+configure_system_time() (
+  set -euf
   log_info "Configuring system time"
 
   timedatectl set-timezone UTC
@@ -478,13 +506,14 @@ configure_system_time() {
   systemctl enable --now chrony
   chronyc makestep
   log_info "Time synchronization complete"
-}
+)
 
 #######################################
 # Install and Configure Vault Server  #
 #######################################
 
-create_vault_user() {
+create_vault_user() (
+  set -euf
   log_info "Creating vault system user"
 
   if ! getent group vault >/dev/null 2>&1; then
@@ -494,9 +523,10 @@ create_vault_user() {
   if ! id vault >/dev/null 2>&1; then
     useradd --system -g vault -d "$${VAULT_HOME_DIR}" -s /bin/false vault
   fi
-}
+)
 
-configure_vault_directories() {
+configure_vault_directories() (
+  set -euf
   log_info "Configuring Vault directory tree"
 
   mkdir -p "$${VAULT_HOME_DIR}"
@@ -530,9 +560,10 @@ configure_vault_directories() {
   mkdir -p "$${VAULT_POLICY_DIR}"
   chown vault:vault "$${VAULT_POLICY_DIR}"
   chmod 755 "$${VAULT_POLICY_DIR}"
-}
+)
 
-write_vault_shell_env() {
+write_vault_shell_env() (
+  set -euf
   log_info "Writing Vault CLI environment to /etc/profile.d/99-vault-cli-config.sh"
 
   cat >/etc/profile.d/99-vault-cli-config.sh <<EOF
@@ -540,9 +571,10 @@ export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_TLS_SERVER_NAME="$${VAULT_FQDN}"
 export VAULT_CACERT="$${VAULT_TLS_CA_FILE}"
 EOF
-}
+)
 
-detect_system_architecture() {
+detect_system_architecture() (
+  set -euf
   machine="$(uname -m)"
   case "$${machine}" in
     x86_64) printf 'amd64' ;;
@@ -552,9 +584,10 @@ detect_system_architecture() {
       return 1
       ;;
   esac
-}
+)
 
-download_and_verify_vault() {
+download_and_verify_vault() (
+  set -euf
   version="$${1}"
   arch="$${2}"
   tmp_dir="$${3}"
@@ -585,11 +618,14 @@ download_and_verify_vault() {
   cd "$${tmp_dir}" || return 1
   sha256sum -c --ignore-missing "$${sums_file}"
   cd / || return 1
-}
+)
 
-install_vault() {
+install_vault() (
+  set -euf
+  tmp_dir=$(mktemp -d -p "$${TMPDIR_SESSION}") || return 1
+  trap 'rm -rf "$${tmp_dir}"' EXIT INT TERM HUP
+
   log_info "Installing Vault Enterprise $${VAULT_VERSION}"
-  tmp_dir="$(mktemp -d)"
 
   arch="$(detect_system_architecture)"
   download_and_verify_vault "$${VAULT_VERSION}" "$${arch}" "$${tmp_dir}"
@@ -601,20 +637,21 @@ install_vault() {
   chmod 0755 /usr/bin/vault
 
   ln -sf /usr/bin/vault /usr/local/bin/vault
-  rm -rf "$${tmp_dir}"
 
   log_info "Vault Enterprise $${VAULT_VERSION} installed"
-}
+)
 
-write_vault_service_unit() {
+write_vault_service_unit() (
+  set -euf
   log_info "Writing Vault systemd unit"
 
   cat >/etc/systemd/system/vault.service <<'EOF'
 ${config_vault_service}
 EOF
-}
+)
 
-write_vault_service_override() {
+write_vault_service_override() (
+  set -euf
   log_info "Writing Vault systemd override"
 
   mkdir -p /etc/systemd/system/vault.service.d
@@ -625,16 +662,18 @@ EOF
   # Overrides can contain sensitive values so marking it as read-only
   # by the file owner.
   chmod 0600 /etc/systemd/system/vault.service.d/override.conf
-}
+)
 
-start_vault() {
+start_vault() (
+  set -euf
   log_info "Starting Vault"
 
   systemctl daemon-reload
   systemctl enable --now vault
-}
+)
 
-wait_for_vault_api() {
+wait_for_vault_api() (
+  set -euf
   log_info "Waiting for the Vault API to be ready"
 
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -651,12 +690,14 @@ wait_for_vault_api() {
 
   log_error "Vault API did not respond after $${attempt} attempts, failing bootstrap"
   return 1
-}
+)
 
-wait_for_vault_unsealed() {
+wait_for_vault_unsealed() (
+  set -euf
+  tmp_err=$(mktemp -p "$${TMPDIR_SESSION}") || return 1
+  trap 'rm -f "$${tmp_err}"' EXIT INT TERM HUP
+
   log_info "Waiting for the Vault cluster to be unsealed"
-
-  tmp_err="$(mktemp)"
 
   # 60 attempts x 10s = 10 minutes.
   max_attempts=60
@@ -669,7 +710,6 @@ wait_for_vault_unsealed() {
 
     case "$${vault_status_exit_code}" in
       0)
-        rm -f "$${tmp_err}"
         log_info "Cluster is unsealed, proceeding"
         return 0
         ;;
@@ -686,21 +726,22 @@ wait_for_vault_unsealed() {
     sleep 5
   done
 
-  rm -f "$${tmp_err}"
   log_error "Vault did not unseal after $${max_attempts} attempts, failing bootstrap"
   return 1
-}
+)
 
-write_vault_license() {
+write_vault_license() (
+  set -euf
   vault_license="$(fetch_vault_license)"
 
   log_info "Writing the Vault license"
   printf '%s\n' "$${vault_license}" >"$${VAULT_LICENSE_FILE}"
   chown vault:vault "$${VAULT_LICENSE_FILE}"
   chmod 0640 "$${VAULT_LICENSE_FILE}"
-}
+)
 
-write_vault_config() {
+write_vault_config() (
+  set -euf
   private_ip="$(get_private_ip)"
   instance_id="$(get_instance_id)"
   availability_zone="$(get_availability_zone)"
@@ -713,38 +754,42 @@ EOF
 
   chown vault:vault "$${VAULT_CONFIG_FILE}"
   chmod 0640 "$${VAULT_CONFIG_FILE}"
-}
+)
 
 #######################################
 #       Configure Vault Cluster       #
 #######################################
 
-configure_file_audit_device() {
+configure_file_audit_device() (
+  set -euf
   log_info "Configuring Vault file audit device"
 
   if ! vault audit list -format=json | jq -e '."file/"' >/dev/null 2>&1; then
     vault audit enable file file_path="$${VAULT_AUDIT_LOG_FILE}"
   fi
-}
+)
 
-configure_autopilot() {
+configure_autopilot() (
+  set -euf
   log_info "Configuring Raft Autopilot"
 
   vault operator raft autopilot set-config \
     -cleanup-dead-servers=true \
     -dead-server-last-contact-threshold=10m \
     -min-quorum=$${VAULT_MINIMUM_QUORUM_SIZE}
-}
+)
 
-configure_snapshots() {
+configure_snapshots() (
+  set -euf
   log_info "Configuring automated Raft snapshots"
 
   vault write sys/storage/raft/snapshot-auto/config/hourly \
     @"$${VAULT_SNAPSHOT_CONFIG_FILE}" \
     >/dev/null
-}
+)
 
-write_vault_snapshot_config() {
+write_vault_snapshot_config() (
+  set -euf
   log_info "Writing Vault snapshot configuration"
 
   cat >"$${VAULT_SNAPSHOT_CONFIG_FILE}" <<'EOF'
@@ -753,13 +798,14 @@ EOF
 
   chown vault:vault "$${VAULT_SNAPSHOT_CONFIG_FILE}"
   chmod 0640 "$${VAULT_SNAPSHOT_CONFIG_FILE}"
-}
+)
 
 #######################################
 #        Configure PKI Engine         #
 #######################################
 
-configure_pki_vault_secrets_engine() {
+configure_pki_vault_secrets_engine() (
+  set -euf
   log_info "Enabling Vault PKI secrets engine"
 
   if ! vault secrets list -format=json | jq -e '."pki_vault/"' >/dev/null 2>&1; then
@@ -769,12 +815,10 @@ configure_pki_vault_secrets_engine() {
   vault secrets tune -max-lease-ttl="$${VAULT_PKI_VAULT_MOUNT_MAX_TTL}" pki_vault >/dev/null
 
   log_info "Vault PKI secrets engine enabled"
-}
+)
 
-configure_pki_vault_intermediate_ca() (
-  set -euf
+configure_pki_vault_intermediate_ca() {
   tmp_dir=$(mktemp -d -p "$${TMPDIR_SESSION}") || return 1
-  trap 'rm -rf "$${tmp_dir}"' EXIT INT TERM HUP
 
   log_info "Configuring Vault PKI intermediate CA"
 
@@ -846,9 +890,10 @@ EOF
     >/dev/null
 
   log_info "Intermediate CA signed and imported"
-)
+}
 
-configure_vault_server_pki_role() {
+configure_vault_server_pki_role() (
+  set -euf
   log_info "Creating vault-server PKI role"
 
   vault write pki_vault/roles/vault-server - >/dev/null <<EOF
@@ -869,9 +914,10 @@ configure_vault_server_pki_role() {
 EOF
 
   log_info "vault-server PKI role created"
-}
+)
 
-write_vault_server_policy() {
+write_vault_server_policy() (
+  set -euf
   log_info "Writing vault-server policy"
 
   cat >"$${VAULT_POLICY_DIR}/vault-server.hcl" <<'EOF'
@@ -881,9 +927,10 @@ EOF
   vault policy write vault-server "$${VAULT_POLICY_DIR}/vault-server.hcl"
 
   log_info "vault-server policy written"
-}
+)
 
-write_admin_policy() {
+write_admin_policy() (
+  set -euf
   log_info "Writing admin policy"
 
   cat >"$${VAULT_POLICY_DIR}/admin.hcl" <<'EOF'
@@ -893,9 +940,10 @@ EOF
   vault policy write admin "$${VAULT_POLICY_DIR}/admin.hcl"
 
   log_info "admin policy written"
-}
+)
 
-write_vault_pki_ca_bundle() {
+write_vault_pki_ca_bundle() (
+  set -euf
   cluster_tls_ca_bundle="$(fetch_tls_ca_bundle)"
 
   log_info "Replacing bootstrap CA cert with PKI managed TLS CA bundle"
@@ -909,7 +957,7 @@ write_vault_pki_ca_bundle() {
     rm -f "$${temporary_cluster_ca_file}"
     log_info "Removed temporary PKI CA cert file $${temporary_cluster_ca_file}"
   fi
-}
+)
 
 issue_vault_pki_tls_certificate_and_key() {
   log_info "Issuing PKI TLS certificate and private key for this node"
@@ -966,15 +1014,17 @@ EOF
   log_info "PKI TLS private key written to $${VAULT_TLS_KEY_FILE}"
 }
 
-reload_vault_listener() {
+reload_vault_listener() (
+  set -euf
   log_info "Reloading Vault TLS listener with PKI-signed certificate"
 
   systemctl kill --signal=SIGHUP --kill-whom=main vault.service
 
   log_info "Vault TLS listener reloaded"
-}
+)
 
-wait_for_pki_ready() {
+wait_for_pki_ready() (
+  set -euf
   log_info "Waiting for the bootstrap node to finish PKI setup"
 
   # 60 attempts x 10s = 10 minutes.
@@ -995,13 +1045,15 @@ wait_for_pki_ready() {
 
   log_error "PKI was not ready after $${max_attempts} attempts, failing bootstrap"
   return 1
-}
+)
 
-fetch_tls_ca_bundle() {
+fetch_tls_ca_bundle() (
+  set -euf
   fetch_parameter "$${VAULT_TLS_CA_BUNDLE_SSM_NAME}"
-}
+)
 
-fetch_signed_intermediate() {
+fetch_signed_intermediate() (
+  set -euf
   interval=10
   max_attempts=$((VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS / interval))
   attempt=0
@@ -1023,13 +1075,14 @@ fetch_signed_intermediate() {
 
   log_error "Timed out after $${VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS}s waiting for signed intermediate at $${VAULT_PKI_INTERMEDIATE_CA_SIGNED_CSR_SECRET_ARN}"
   return 1
-}
+)
 
 #######################################
 #      Configure AWS Auth Method      #
 #######################################
 
-enable_aws_auth_method() {
+enable_aws_auth_method() (
+  set -euf
   log_info "Enabling Vault AWS auth method"
 
   if ! vault auth list -format=json | jq -e '."aws/"' >/dev/null 2>&1; then
@@ -1037,9 +1090,10 @@ enable_aws_auth_method() {
   fi
 
   log_info "Vault AWS auth method enabled"
-}
+)
 
-bind_vault_server_iam_role() {
+bind_vault_server_iam_role() (
+  set -euf
   log_info "Binding vault-server IAM role"
 
   vault write auth/aws/role/vault-server - >/dev/null <<EOF
@@ -1051,28 +1105,31 @@ bind_vault_server_iam_role() {
   "ttl": "$${VAULT_AWS_AUTH_ROLE_TTL}"
 }
 EOF
-}
+)
 
 #######################################
 #   Configure JWT Auth Method (HCP)   #
 #######################################
 
-enable_jwt_auth_method() {
+enable_jwt_auth_method() (
+  set -euf
   log_info "Enabling Vault JWT auth method"
 
   if ! vault auth list -format=json | jq -e ".\"$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}/\"" >/dev/null 2>&1; then
     vault auth enable -path="$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}" jwt
   fi
-}
+)
 
-configure_jwt_auth_method() {
+configure_jwt_auth_method() (
+  set -euf
   log_info "Configuring JWT auth method for HCP Terraform"
 
   # Handle the case when HCP Terraform Enterprise (TFE) uses a custom
   # or self-signed CA certificate.
   ca_pem_arg=""
   if [ -n "$${HCP_TERRAFORM_JWT_AUTH_OIDC_DISCOVERY_CA_PEM:-}" ]; then
-    tmp_ca_pem="$(mktemp)"
+    tmp_ca_pem=$(mktemp -p "$${TMPDIR_SESSION}") || return 1
+    trap 'rm -f "$${tmp_ca_pem}"' EXIT INT TERM HUP
     printf '%s' "$${HCP_TERRAFORM_JWT_AUTH_OIDC_DISCOVERY_CA_PEM}" >"$${tmp_ca_pem}"
     ca_pem_arg="oidc_discovery_ca_pem=@$${tmp_ca_pem}"
   fi
@@ -1082,13 +1139,10 @@ configure_jwt_auth_method() {
     bound_issuer="https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
     $${ca_pem_arg} \
     >/dev/null
+)
 
-  if [ -n "$${tmp_ca_pem:-}" ]; then
-    rm -f "$${tmp_ca_pem}"
-  fi
-}
-
-bind_admin_jwt_role() {
+bind_admin_jwt_role() (
+  set -euf
   log_info "Binding $${HCP_TERRAFORM_JWT_AUTH_ROLE_NAME} JWT role"
 
   bound_claims="\"terraform_organization_name\": \"$${HCP_TERRAFORM_JWT_AUTH_ORGANIZATION_NAME}\""
@@ -1112,44 +1166,49 @@ bind_admin_jwt_role() {
   "max_ttl": "$${VAULT_JWT_AUTH_ROLE_MAX_TTL}"
 }
 EOF
-}
+)
 
 #######################################
 #  Install and Configure Vault Agent  #
 #######################################
 
-configure_vault_agent_directories() {
+configure_vault_agent_directories() (
+  set -euf
   log_info "Configuring Vault Agent directory tree"
 
   mkdir -p "$${VAULT_AGENT_TEMPLATE_DIR}"
   chown vault:vault "$${VAULT_AGENT_TEMPLATE_DIR}"
   chmod 755 "$${VAULT_AGENT_TEMPLATE_DIR}"
-}
+)
 
-write_vault_agent_service_unit() {
+write_vault_agent_service_unit() (
+  set -euf
   log_info "Writing Vault Agent systemd unit"
 
   cat >/etc/systemd/system/vault-agent.service <<'EOF'
 ${config_agent_service}
 EOF
-}
+)
 
-start_vault_agent() {
+start_vault_agent() (
+  set -euf
   log_info "Starting Vault Agent"
 
   systemctl daemon-reload
   systemctl enable --now vault-agent
-}
+)
 
-write_vault_agent_reload_rules() {
+write_vault_agent_reload_rules() (
+  set -euf
   log_info "Writing Vault Agent polkit rules"
 
   cat >"$${VAULT_AGENT_RELOAD_RULES_FILE}" <<'EOF'
 ${config_agent_reload_rules}
 EOF
-}
+)
 
-write_vault_agent_config() {
+write_vault_agent_config() (
+  set -euf
   log_info "Writing Vault Agent configuration"
 
   cat >"$${VAULT_AGENT_CONFIG_FILE}" <<'EOF'
@@ -1158,9 +1217,10 @@ EOF
 
   chown vault:vault "$${VAULT_AGENT_CONFIG_FILE}"
   chmod 0644 "$${VAULT_AGENT_CONFIG_FILE}"
-}
+)
 
-write_vault_agent_tls_template() {
+write_vault_agent_tls_template() (
+  set -euf
   log_info "Writing Vault Agent TLS certificate template"
 
   cat >"$${VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE}" <<'EOF'
@@ -1169,9 +1229,10 @@ EOF
 
   chown vault:vault "$${VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE}"
   chmod 0644 "$${VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE}"
-}
+)
 
-write_vault_agent_reload_script() {
+write_vault_agent_reload_script() (
+  set -euf
   log_info "Writing Vault Agent TLS reload script"
 
   cat >"$${VAULT_AGENT_SERVER_TLS_RELOAD_FILE}" <<'EOF'
@@ -1180,7 +1241,7 @@ EOF
 
   chown root:root "$${VAULT_AGENT_SERVER_TLS_RELOAD_FILE}"
   chmod 0755 "$${VAULT_AGENT_SERVER_TLS_RELOAD_FILE}"
-}
+)
 
 main() {
   export VAULT_ADDR="https://127.0.0.1:8200"
