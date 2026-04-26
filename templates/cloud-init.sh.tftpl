@@ -694,9 +694,6 @@ wait_for_vault_api() (
 
 wait_for_vault_unsealed() (
   set -euf
-  tmp_file=$(mktemp -p "$${TMPDIR_SESSION}") || return 1
-  trap 'rm -f "$${tmp_file}"' EXIT INT TERM HUP
-
   log_info "Waiting for the Vault cluster to be unsealed"
 
   # 60 attempts x 10s = 10 minutes.
@@ -706,7 +703,8 @@ wait_for_vault_unsealed() (
     attempt=$((attempt + 1))
 
     vault_status_exit_code=0
-    vault status -format=json >/dev/null 2>"$${tmp_file}" || vault_status_exit_code="$?"
+    vault_status_err="$(vault status -format=json 2>&1 >/dev/null)" ||
+      vault_status_exit_code="$?"
 
     case "$${vault_status_exit_code}" in
       0)
@@ -718,7 +716,7 @@ wait_for_vault_unsealed() (
         ;;
       *)
         log_warn "Vault returned an error when querying status:"
-        log_warn "$(cat "$${tmp_file}")"
+        log_warn "$${vault_status_err}"
         ;;
     esac
 
@@ -1120,26 +1118,29 @@ enable_jwt_auth_method() (
   fi
 )
 
+write_jwt_auth_config() (
+  set -euf
+  # $@ = optional extra arg, "oidc_discovery_ca_pem=@..."
+  vault write "auth/$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}/config" \
+    "oidc_discovery_url=https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
+    "bound_issuer=https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
+    "$$@" \
+    >/dev/null
+)
+
 configure_jwt_auth_method() (
   set -euf
   log_info "Configuring JWT auth method for HCP Terraform"
 
   # Handle the case when HCP Terraform Enterprise (TFE) uses a custom
   # or self-signed CA certificate.
-  ca_pem_arg=""
   if [ -n "$${HCP_TERRAFORM_JWT_AUTH_OIDC_DISCOVERY_CA_PEM:-}" ]; then
-    tmp_file=$(mktemp -p "$${TMPDIR_SESSION}") || return 1
-    trap 'rm -f "$${tmp_file}"' EXIT INT TERM HUP
-
-    printf '%s' "$${HCP_TERRAFORM_JWT_AUTH_OIDC_DISCOVERY_CA_PEM}" >"$${tmp_file}"
-    ca_pem_arg="oidc_discovery_ca_pem=@$${tmp_file}"
+    ca_pem_file="$${TMPDIR_SESSION}/jwt_oidc_discovery_ca.pem"
+    printf '%s' "$${HCP_TERRAFORM_JWT_AUTH_OIDC_DISCOVERY_CA_PEM}" >"$${ca_pem_file}"
+    write_jwt_auth_config "oidc_discovery_ca_pem=@$${ca_pem_file}"
+  else
+    write_jwt_auth_config
   fi
-
-  vault write "auth/$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}/config" \
-    oidc_discovery_url="https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
-    bound_issuer="https://$${HCP_TERRAFORM_JWT_AUTH_HOSTNAME}" \
-    $${ca_pem_arg} \
-    >/dev/null
 )
 
 bind_admin_jwt_role() (
