@@ -45,7 +45,6 @@ resource "aws_launch_template" "vault" {
     # Environment
     vault_version = var.vault_version
     vault_fqdn    = local.vault_fqdn
-    aws_region    = data.aws_region.current.region
 
     # Prepare Storage
     ebs_raft_device_name  = local.ebs_raft_device_name
@@ -74,7 +73,6 @@ resource "aws_launch_template" "vault" {
     vault_minimum_quorum_size             = var.vault_node_count
 
     # PKI and TLS
-    cluster_name                                       = title(var.project_name)
     vault_pki_state_ssm_name                           = aws_ssm_parameter.vault_pki_state.name
     vault_tls_ca_bundle_ssm_name                       = aws_ssm_parameter.vault_tls_ca_bundle.name
     vault_pki_intermediate_ca_common_name              = var.vault_pki_intermediate_ca.common_name

@@ -46,7 +46,6 @@ readonly VAULT_AGENT_RELOAD_RULES_FILE="/etc/polkit-1/rules.d/10-vault-agent-rel
 # Environment
 readonly VAULT_VERSION="${vault_version}"
 readonly VAULT_FQDN="${vault_fqdn}"
-readonly AWS_REGION="${aws_region}"
 
 # EBS Volumes
 readonly EBS_RAFT_DEVICE_NAME="${ebs_raft_device_name}"
@@ -67,9 +66,7 @@ readonly VAULT_RECOVERY_KEYS_SECRET_ARN="${vault_recovery_keys_secret_arn}"
 readonly VAULT_MINIMUM_QUORUM_SIZE="${vault_minimum_quorum_size}"
 
 # PKI and TLS
-readonly CLUSTER_NAME="${cluster_name}"
 readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="26280h"
-readonly VAULT_PKI_VAULT_CA_TTL="26280h"
 readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="24h"
 readonly VAULT_PKI_SERVER_CERT_TTL="24h"
 readonly VAULT_PKI_STATE_SSM_NAME="${vault_pki_state_ssm_name}"
