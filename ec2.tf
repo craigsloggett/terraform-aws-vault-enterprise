@@ -83,9 +83,14 @@ resource "aws_launch_template" "vault" {
     vault_pki_intermediate_ca_csr_ssm_name             = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
     vault_pki_signed_intermediate_wait_timeout_seconds = var.vault_pki_signed_intermediate_wait_timeout_seconds
     vault_pki_intermediate_ca_signed_csr_secret_arn    = aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn
+    vault_pki_vault_mount_max_ttl                      = var.vault_pki_vault_mount_max_ttl
+    vault_pki_vault_server_role_max_ttl                = var.vault_pki_vault_server_role_max_ttl
+    vault_pki_server_cert_ttl                          = var.vault_pki_server_cert_ttl
 
     # AWS Auth
-    vault_iam_role_arn = aws_iam_role.vault.arn
+    vault_iam_role_arn          = aws_iam_role.vault.arn
+    vault_aws_auth_role_max_ttl = var.vault_aws_auth_role_max_ttl
+    vault_aws_auth_role_ttl     = var.vault_aws_auth_role_ttl
 
     # HCP Terraform JWT Auth
     hcp_terraform_jwt_auth_hostname              = var.hcp_terraform_jwt_auth.hostname
@@ -94,6 +99,8 @@ resource "aws_launch_template" "vault" {
     hcp_terraform_jwt_auth_oidc_discovery_ca_pem = var.hcp_terraform_jwt_auth.oidc_discovery_ca_pem
     hcp_terraform_jwt_auth_mount_path            = var.hcp_terraform_jwt_auth.mount_path
     hcp_terraform_jwt_auth_role_name             = var.hcp_terraform_jwt_auth.role_name
+    vault_jwt_auth_role_max_ttl                  = var.vault_jwt_auth_role_max_ttl
+    vault_jwt_auth_role_ttl                      = var.vault_jwt_auth_role_ttl
 
     # Vault Agent
     config_agent_hcl                     = local.config_agent_hcl

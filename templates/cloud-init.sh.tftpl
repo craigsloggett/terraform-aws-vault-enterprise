@@ -66,9 +66,9 @@ readonly VAULT_RECOVERY_KEYS_SECRET_ARN="${vault_recovery_keys_secret_arn}"
 readonly VAULT_MINIMUM_QUORUM_SIZE="${vault_minimum_quorum_size}"
 
 # PKI and TLS
-readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="26280h"
-readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="24h"
-readonly VAULT_PKI_SERVER_CERT_TTL="24h"
+readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="${vault_pki_vault_mount_max_ttl}"
+readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="${vault_pki_vault_server_role_max_ttl}"
+readonly VAULT_PKI_SERVER_CERT_TTL="${vault_pki_server_cert_ttl}"
 readonly VAULT_PKI_STATE_SSM_NAME="${vault_pki_state_ssm_name}"
 readonly VAULT_TLS_CA_BUNDLE_SSM_NAME="${vault_tls_ca_bundle_ssm_name}"
 readonly VAULT_PKI_INTERMEDIATE_CA_SIGNED_CSR_SECRET_ARN="${vault_pki_intermediate_ca_signed_csr_secret_arn}"
@@ -82,8 +82,8 @@ readonly VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS="${vault_pki_signed_
 
 # AWS Auth
 readonly VAULT_IAM_ROLE_ARN="${vault_iam_role_arn}"
-readonly VAULT_AWS_AUTH_ROLE_MAX_TTL="24h"
-readonly VAULT_AWS_AUTH_ROLE_TTL="4h"
+readonly VAULT_AWS_AUTH_ROLE_MAX_TTL="${vault_aws_auth_role_max_ttl}"
+readonly VAULT_AWS_AUTH_ROLE_TTL="${vault_aws_auth_role_ttl}"
 
 # HCP Terraform JWT Auth
 readonly HCP_TERRAFORM_JWT_AUTH_HOSTNAME="${hcp_terraform_jwt_auth_hostname}"
@@ -92,8 +92,8 @@ readonly HCP_TERRAFORM_JWT_AUTH_WORKSPACE_ID="${hcp_terraform_jwt_auth_workspace
 readonly HCP_TERRAFORM_JWT_AUTH_OIDC_DISCOVERY_CA_PEM="${hcp_terraform_jwt_auth_oidc_discovery_ca_pem}"
 readonly HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH="${hcp_terraform_jwt_auth_mount_path}"
 readonly HCP_TERRAFORM_JWT_AUTH_ROLE_NAME="${hcp_terraform_jwt_auth_role_name}"
-readonly VAULT_JWT_AUTH_ROLE_TTL="1h"
-readonly VAULT_JWT_AUTH_ROLE_MAX_TTL="2h"
+readonly VAULT_JWT_AUTH_ROLE_MAX_TTL="${vault_jwt_auth_role_max_ttl}"
+readonly VAULT_JWT_AUTH_ROLE_TTL="${vault_jwt_auth_role_ttl}"
 
 #######################################
 #           Logging Helpers           #
