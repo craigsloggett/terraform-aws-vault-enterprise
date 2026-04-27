@@ -371,7 +371,7 @@ mark_pki_ready() (
 #     Configure Host EBS Volumes      #
 #######################################
 
-resolve_ebs_nvme_device() (
+get_ebs_nvme_device() (
   target_name="$${1}"
 
   target_short="$${target_name#/dev/}"
@@ -395,22 +395,33 @@ resolve_ebs_nvme_device() (
   return 1
 )
 
-prepare_disk() (
+wait_for_ebs_nvme_device() (
+  set -euf
   device_attachment_name="$${1}"
-  mount_point="$${2}"
-  fs_label="$${3}"
 
-  for attempt in 1 2 3 4 5; do
-    if device="$(resolve_ebs_nvme_device "$${device_attachment_name}")"; then
-      break
+  log_info "Waiting for NVMe device for attachment $${device_attachment_name}"
+
+  interval=5
+  max_attempts=5
+  attempt=0
+
+  while [ "$${attempt}" -lt "$${max_attempts}" ]; do
+    attempt=$((attempt + 1))
+    if get_ebs_nvme_device "$${device_attachment_name}" >/dev/null 2>&1; then
+      return 0
     fi
-    sleep 5
+    sleep "$${interval}"
   done
 
-  if [ -z "$${device}" ]; then
-    log_error "NVMe device was not found after $${attempt} attempts, failing bootstrap"
-    return 1
-  fi
+  log_error "NVMe device for attachment $${device_attachment_name} did not appear after $${max_attempts} attempts"
+  return 1
+)
+
+prepare_disk() (
+  set -euf
+  device="$${1}"
+  mount_point="$${2}"
+  fs_label="$${3}"
 
   if [ "$${#fs_label}" -gt 12 ]; then
     log_error "XFS labels must be 12 characters or fewer: $${fs_label}"
@@ -424,12 +435,16 @@ prepare_disk() (
     log_info "Filesystem already present on $${device}, skipping format"
   fi
 
-  log_info "Mounting $${device} at $${mount_point}"
-  mkdir -p "$${mount_point}"
-  mount -t xfs "$${device}" "$${mount_point}"
+  if ! mountpoint -q "$${mount_point}"; then
+    log_info "Mounting $${device} at $${mount_point}"
+    mkdir -p "$${mount_point}"
+    mount -t xfs "$${device}" "$${mount_point}"
+  else
+    log_info "$${mount_point} already mounted, skipping"
+  fi
 
   uuid="$(blkid -s UUID -o value "$${device}")"
-  if ! grep -q "$${uuid}" /etc/fstab; then
+  if ! grep -qE "^UUID=$${uuid}[[:blank:]]" /etc/fstab; then
     printf 'UUID=%s  %s  xfs  defaults,nofail  0  2\n' \
       "$${uuid}" "$${mount_point}" \
       >>/etc/fstab
@@ -1219,8 +1234,13 @@ main() {
   configure_system_time
 
   # Prepare Storage
-  prepare_disk "$${EBS_RAFT_DEVICE_NAME}" "$${VAULT_RAFT_DIR}" "vault-raft"
-  prepare_disk "$${EBS_AUDIT_DEVICE_NAME}" "$${VAULT_LOG_DIR}" "vault-audit"
+  wait_for_ebs_nvme_device "$${EBS_RAFT_DEVICE_NAME}"
+  raft_device="$(get_ebs_nvme_device "$${EBS_RAFT_DEVICE_NAME}")"
+  prepare_disk "$${raft_device}" "$${VAULT_RAFT_DIR}" "vault-raft"
+
+  wait_for_ebs_nvme_device "$${EBS_AUDIT_DEVICE_NAME}"
+  audit_device="$(get_ebs_nvme_device "$${EBS_AUDIT_DEVICE_NAME}")"
+  prepare_disk "$${audit_device}" "$${VAULT_LOG_DIR}" "vault-audit"
 
   # Prepare Vault Server
   create_vault_user
