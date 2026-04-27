@@ -257,19 +257,30 @@ get_vault_node_role() (
   fi
 )
 
+list_cluster_instance_ids() (
+  for attempt in 1 2 3 4 5; do
+    if result="$(
+      aws ec2 describe-instances \
+        --filters \
+          "Name=tag:$${VAULT_CLUSTER_TAG_KEY},Values=$${VAULT_CLUSTER_TAG_VALUE}" \
+          "Name=instance-state-name,Values=running" \
+        --query "Reservations[].Instances[].InstanceId" \
+        --output text 2>/dev/null
+    )"; then
+      printf '%s' "$${result}"
+      return 0
+    fi
+    sleep 5
+  done
+
+  log_error "Failed to list cluster instances after $${attempt} attempts, failing bootstrap"
+  return 1
+)
+
 is_bootstrap_node() (
   instance_id="$(get_instance_id)"
 
-  # Fetch all running instance IDs in this cluster by tag.
-  all_ids="$(
-    aws ec2 describe-instances \
-      --filters \
-      "Name=tag:$${VAULT_CLUSTER_TAG_KEY},Values=$${VAULT_CLUSTER_TAG_VALUE}" \
-      "Name=instance-state-name,Values=running" \
-      --query "Reservations[].Instances[].InstanceId" \
-      --output text
-  )"
-
+  all_ids="$(list_cluster_instance_ids)"
   lowest_id="$(printf '%s' "$${all_ids}" | tr '\t' '\n' | sort | head -1)"
 
   [ "$${instance_id}" = "$${lowest_id}" ]
