@@ -26,7 +26,7 @@ resource "aws_launch_template" "vault" {
   key_name      = var.ec2_key_pair_name
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.vault.name
+    name = aws_iam_instance_profile.vault_server_instance.name
   }
 
   network_interfaces {
@@ -89,7 +89,7 @@ resource "aws_launch_template" "vault" {
     vault_pki_mount_path                               = var.vault_pki_mount_path
 
     # AWS Auth
-    vault_iam_role_arn          = aws_iam_role.vault.arn
+    vault_iam_role_arn          = aws_iam_role.vault_server_instance.arn
     vault_aws_auth_role_max_ttl = var.vault_aws_auth_role_max_ttl
     vault_aws_auth_role_ttl     = var.vault_aws_auth_role_ttl
 
@@ -215,7 +215,7 @@ resource "aws_autoscaling_group" "vault" {
   }
 
   depends_on = [
-    aws_iam_role_policy.vault_kms,
-    aws_iam_role_policy.vault_secrets_manager,
+    aws_iam_role_policy.vault_server_kms_read_write,
+    aws_iam_role_policy.vault_server_secrets_manager_read,
   ]
 }

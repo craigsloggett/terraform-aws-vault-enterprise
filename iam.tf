@@ -1,4 +1,43 @@
-data "aws_iam_policy_document" "vault_assume_role" {
+locals {
+  iam_project_name = replace(title(replace(var.project_name, "-", " ")), " ", "")
+}
+
+moved {
+  from = aws_iam_role.vault
+  to   = aws_iam_role.vault_server_instance
+}
+
+moved {
+  from = aws_iam_instance_profile.vault
+  to   = aws_iam_instance_profile.vault_server_instance
+}
+
+moved {
+  from = aws_iam_role_policy.vault_kms
+  to   = aws_iam_role_policy.vault_server_kms_read_write
+}
+
+moved {
+  from = aws_iam_role_policy.vault_s3
+  to   = aws_iam_role_policy.vault_server_s3_read_write
+}
+
+moved {
+  from = aws_iam_role_policy.vault_ec2_describe
+  to   = aws_iam_role_policy.vault_server_ec2_read
+}
+
+moved {
+  from = aws_iam_role_policy.vault_ssm
+  to   = aws_iam_role_policy.vault_server_ssm_read_write
+}
+
+moved {
+  from = aws_iam_role_policy.vault_iam_read
+  to   = aws_iam_role_policy.vault_server_iam_read
+}
+
+data "aws_iam_policy_document" "vault_server_instance_assume_role" {
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
@@ -10,21 +49,23 @@ data "aws_iam_policy_document" "vault_assume_role" {
   }
 }
 
-resource "aws_iam_role" "vault" {
-  name_prefix        = "${var.project_name}-vault-"
-  assume_role_policy = data.aws_iam_policy_document.vault_assume_role.json
+resource "aws_iam_role" "vault_server_instance" {
+  name               = "VaultServer${local.iam_project_name}InstanceRole"
+  assume_role_policy = data.aws_iam_policy_document.vault_server_instance_assume_role.json
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault" })
+  tags = merge(var.common_tags, { Name = "VaultServer${local.iam_project_name}InstanceRole" })
 }
 
-resource "aws_iam_instance_profile" "vault" {
-  name_prefix = "${var.project_name}-vault-"
-  role        = aws_iam_role.vault.name
+resource "aws_iam_instance_profile" "vault_server_instance" {
+  name = "VaultServer${local.iam_project_name}InstanceProfile"
+  role = aws_iam_role.vault_server_instance.name
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault" })
+  tags = merge(var.common_tags, { Name = "VaultServer${local.iam_project_name}InstanceProfile" })
 }
 
-data "aws_iam_policy_document" "vault_kms" {
+# KMS (auto-unseal)
+
+data "aws_iam_policy_document" "vault_server_kms_read_write" {
   statement {
     effect = "Allow"
     actions = [
@@ -36,13 +77,15 @@ data "aws_iam_policy_document" "vault_kms" {
   }
 }
 
-resource "aws_iam_role_policy" "vault_kms" {
-  name_prefix = "${var.project_name}-kms-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_kms.json
+resource "aws_iam_role_policy" "vault_server_kms_read_write" {
+  name   = "VaultServer${local.iam_project_name}KMSReadWritePolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_kms_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_secrets_manager" {
+# Secrets Manager (license, TLS materials, signed intermediate CSR)
+
+data "aws_iam_policy_document" "vault_server_secrets_manager_read" {
   statement {
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
@@ -51,17 +94,48 @@ data "aws_iam_policy_document" "vault_secrets_manager" {
       aws_secretsmanager_secret.vault_bootstrap_tls_ca.arn,
       aws_secretsmanager_secret.vault_bootstrap_tls_cert.arn,
       aws_secretsmanager_secret.vault_bootstrap_tls_private_key.arn,
+      aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn,
+    ]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["secretsmanager:DescribeSecret"]
+    resources = [aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "vault_server_secrets_manager_read" {
+  name   = "VaultServer${local.iam_project_name}SecretsManagerReadPolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_secrets_manager_read.json
+}
+
+# Secrets Manager (bootstrap root token, recovery keys — read/write during initialization)
+
+data "aws_iam_policy_document" "vault_server_secrets_manager_read_write" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:PutSecretValue",
+    ]
+    resources = [
+      aws_secretsmanager_secret.vault_bootstrap_root_token.arn,
+      aws_secretsmanager_secret.vault_recovery_keys.arn,
     ]
   }
 }
 
-resource "aws_iam_role_policy" "vault_secrets_manager" {
-  name_prefix = "${var.project_name}-secrets-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_secrets_manager.json
+resource "aws_iam_role_policy" "vault_server_secrets_manager_read_write" {
+  name   = "VaultServer${local.iam_project_name}SecretsManagerReadWritePolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_secrets_manager_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_s3" {
+# S3 (snapshots)
+
+data "aws_iam_policy_document" "vault_server_s3_read_write" {
   statement {
     effect = "Allow"
     actions = [
@@ -77,13 +151,15 @@ data "aws_iam_policy_document" "vault_s3" {
   }
 }
 
-resource "aws_iam_role_policy" "vault_s3" {
-  name_prefix = "${var.project_name}-s3-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_s3.json
+resource "aws_iam_role_policy" "vault_server_s3_read_write" {
+  name   = "VaultServer${local.iam_project_name}S3ReadWritePolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_s3_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_ec2_describe" {
+# EC2 (auto-join)
+
+data "aws_iam_policy_document" "vault_server_ec2_read" {
   statement {
     effect    = "Allow"
     actions   = ["ec2:DescribeInstances"]
@@ -91,51 +167,16 @@ data "aws_iam_policy_document" "vault_ec2_describe" {
   }
 }
 
-resource "aws_iam_role_policy" "vault_ec2_describe" {
-  name_prefix = "${var.project_name}-ec2-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_ec2_describe.json
+resource "aws_iam_role_policy" "vault_server_ec2_read" {
+  name   = "VaultServer${local.iam_project_name}EC2ReadPolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_ec2_read.json
 }
 
-data "aws_iam_policy_document" "vault_bootstrap_root_token" {
+# SSM Parameter Store (cluster, PKI, TLS state)
+
+data "aws_iam_policy_document" "vault_server_ssm_read_write" {
   statement {
-    sid    = "BootstrapRootTokenReadWrite"
-    effect = "Allow"
-    actions = [
-      "secretsmanager:GetSecretValue",
-      "secretsmanager:PutSecretValue",
-    ]
-    resources = [aws_secretsmanager_secret.vault_bootstrap_root_token.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "vault_bootstrap_root_token" {
-  name_prefix = "${var.project_name}-bootstrap-root-token-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_bootstrap_root_token.json
-}
-
-data "aws_iam_policy_document" "vault_recovery_keys" {
-  statement {
-    sid    = "RecoveryKeysReadWrite"
-    effect = "Allow"
-    actions = [
-      "secretsmanager:GetSecretValue",
-      "secretsmanager:PutSecretValue",
-    ]
-    resources = [aws_secretsmanager_secret.vault_recovery_keys.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "vault_recovery_keys" {
-  name_prefix = "${var.project_name}-recovery-keys-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_recovery_keys.json
-}
-
-data "aws_iam_policy_document" "vault_ssm" {
-  statement {
-    sid    = "ClusterStateReadWrite"
     effect = "Allow"
     actions = [
       "ssm:GetParameter",
@@ -150,43 +191,24 @@ data "aws_iam_policy_document" "vault_ssm" {
   }
 }
 
-resource "aws_iam_role_policy" "vault_ssm" {
-  name_prefix = "${var.project_name}-ssm-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_ssm.json
+resource "aws_iam_role_policy" "vault_server_ssm_read_write" {
+  name   = "VaultServer${local.iam_project_name}SSMReadWritePolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_ssm_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_pki_intermediate_ca_signed_csr" {
+# IAM (resolve own role ARN at runtime)
+
+data "aws_iam_policy_document" "vault_server_iam_read" {
   statement {
-    sid    = "IntermediateCARead"
-    effect = "Allow"
-    actions = [
-      "secretsmanager:GetSecretValue",
-      "secretsmanager:DescribeSecret",
-    ]
-    resources = [aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn]
+    effect    = "Allow"
+    actions   = ["iam:GetRole"]
+    resources = [aws_iam_role.vault_server_instance.arn]
   }
 }
 
-resource "aws_iam_role_policy" "vault_pki_intermediate_ca_signed_csr" {
-  name_prefix = "${var.project_name}-pki-intermediate-ca-signed-csr-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_pki_intermediate_ca_signed_csr.json
-}
-
-data "aws_iam_policy_document" "vault_iam_read" {
-  statement {
-    sid    = "ResolveIAMRoleARN"
-    effect = "Allow"
-    actions = [
-      "iam:GetRole",
-    ]
-    resources = [aws_iam_role.vault.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "vault_iam_read" {
-  name_prefix = "${var.project_name}-iam-read-"
-  role        = aws_iam_role.vault.id
-  policy      = data.aws_iam_policy_document.vault_iam_read.json
+resource "aws_iam_role_policy" "vault_server_iam_read" {
+  name   = "VaultServer${local.iam_project_name}IAMReadPolicy"
+  role   = aws_iam_role.vault_server_instance.id
+  policy = data.aws_iam_policy_document.vault_server_iam_read.json
 }

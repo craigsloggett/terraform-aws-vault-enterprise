@@ -111,7 +111,7 @@ data "aws_iam_policy_document" "vault_bootstrap_tls_private_key" {
 
     principals {
       type        = "AWS"
-      identifiers = [aws_iam_role.vault.arn]
+      identifiers = [aws_iam_role.vault_server_instance.arn]
     }
 
     actions   = ["secretsmanager:GetSecretValue"]
