@@ -317,3 +317,14 @@ variable "vault_pki_server_cert_ttl" {
   description = "TTL requested when the bootstrap script issues the Vault server certificate."
   default     = "24h"
 }
+
+variable "vault_pki_mount_path" {
+  type        = string
+  description = "Mount path for the Vault PKI secrets engine used to issue Vault server TLS certificates."
+  default     = "pki_vault"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9_-]+$", var.vault_pki_mount_path))
+    error_message = "vault_pki_mount_path must contain only alphanumeric characters, underscores, and hyphens."
+  }
+}
