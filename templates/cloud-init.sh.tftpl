@@ -66,6 +66,7 @@ readonly VAULT_RECOVERY_KEYS_SECRET_ARN="${vault_recovery_keys_secret_arn}"
 readonly VAULT_MINIMUM_QUORUM_SIZE="${vault_minimum_quorum_size}"
 
 # PKI and TLS
+readonly VAULT_PKI_MOUNT_PATH="${vault_pki_mount_path}"
 readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="${vault_pki_vault_mount_max_ttl}"
 readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="${vault_pki_vault_server_role_max_ttl}"
 readonly VAULT_PKI_SERVER_CERT_TTL="${vault_pki_server_cert_ttl}"
@@ -366,7 +367,7 @@ publish_tls_ca_bundle() (
   log_info "Publishing PKI managed TLS CA bundle to SSM"
 
   ca_bundle_response_file="$${TMPDIR_SESSION}/issuer_default_response.json"
-  vault read -format=json pki_vault/issuer/default/json >"$${ca_bundle_response_file}"
+  vault read -format=json "$${VAULT_PKI_MOUNT_PATH}/issuer/default/json" >"$${ca_bundle_response_file}"
   tls_ca_bundle="$(jq -r '.data.ca_chain[]' <"$${ca_bundle_response_file}")"
 
   put_parameter "$${VAULT_TLS_CA_BUNDLE_SSM_NAME}" "$${tls_ca_bundle}"
@@ -794,11 +795,11 @@ EOF
 configure_pki_vault_secrets_engine() (
   log_info "Enabling Vault PKI secrets engine"
 
-  if ! vault secrets list -format=json | jq -e '."pki_vault/"' >/dev/null 2>&1; then
-    vault secrets enable -path=pki_vault pki
+  if ! vault secrets list -format=json | jq -e --arg path "$${VAULT_PKI_MOUNT_PATH}/" '.[$path]' >/dev/null 2>&1; then
+    vault secrets enable -path="$${VAULT_PKI_MOUNT_PATH}" pki
   fi
 
-  vault secrets tune -max-lease-ttl="$${VAULT_PKI_VAULT_MOUNT_MAX_TTL}" pki_vault >/dev/null
+  vault secrets tune -max-lease-ttl="$${VAULT_PKI_VAULT_MOUNT_MAX_TTL}" "$${VAULT_PKI_MOUNT_PATH}" >/dev/null
 
   log_info "Vault PKI secrets engine enabled"
 )
@@ -810,11 +811,11 @@ configure_pki_vault_secrets_engine() (
 generate_pki_intermediate_csr() (
   log_info "Configuring intermediate URLs"
 
-  vault write pki_vault/config/urls - >/dev/null <<EOF
+  vault write "$${VAULT_PKI_MOUNT_PATH}/config/urls" - >/dev/null <<EOF
 {
-  "issuing_certificates": "https://$${VAULT_FQDN}:8200/v1/pki_vault/ca",
-  "crl_distribution_points": "https://$${VAULT_FQDN}:8200/v1/pki_vault/crl",
-  "ocsp_servers": "https://$${VAULT_FQDN}:8200/v1/pki_vault/ocsp"
+  "issuing_certificates": "https://$${VAULT_FQDN}:8200/v1/$${VAULT_PKI_MOUNT_PATH}/ca",
+  "crl_distribution_points": "https://$${VAULT_FQDN}:8200/v1/$${VAULT_PKI_MOUNT_PATH}/crl",
+  "ocsp_servers": "https://$${VAULT_FQDN}:8200/v1/$${VAULT_PKI_MOUNT_PATH}/ocsp"
 }
 EOF
 
@@ -830,7 +831,7 @@ EOF
   )"
 
   csr_response_file="$${TMPDIR_SESSION}/intermediate_csr_response.json"
-  vault write -format=json pki_vault/intermediate/generate/internal - >"$${csr_response_file}" <<EOF
+  vault write -format=json "$${VAULT_PKI_MOUNT_PATH}/intermediate/generate/internal" - >"$${csr_response_file}" <<EOF
 $${csr_payload}
 EOF
 
@@ -904,7 +905,7 @@ import_signed_pki_intermediate() (
   )"
 
   set_signed_response_file="$${TMPDIR_SESSION}/intermediate_set_signed_response.json"
-  vault write -format=json pki_vault/intermediate/set-signed - >"$${set_signed_response_file}" <<EOF
+  vault write -format=json "$${VAULT_PKI_MOUNT_PATH}/intermediate/set-signed" - >"$${set_signed_response_file}" <<EOF
 $${set_signed_payload}
 EOF
 
@@ -912,7 +913,7 @@ EOF
     jq -r '.data.mapping | to_entries[] | select(.value != "") | .key' <"$${set_signed_response_file}"
   )"
 
-  vault write pki_vault/config/issuers default="$${imported_issuer_id}" >/dev/null
+  vault write "$${VAULT_PKI_MOUNT_PATH}/config/issuers" default="$${imported_issuer_id}" >/dev/null
 
   log_info "Intermediate CA signed and imported"
 )
@@ -920,7 +921,7 @@ EOF
 configure_vault_server_pki_role() (
   log_info "Creating vault-server PKI role"
 
-  vault write pki_vault/roles/vault-server - >/dev/null <<EOF
+  vault write "$${VAULT_PKI_MOUNT_PATH}/roles/vault-server" - >/dev/null <<EOF
 {
   "allowed_domains": "$${VAULT_FQDN}",
   "allow_bare_domains": true,
@@ -1008,7 +1009,7 @@ issue_vault_pki_tls_certificate_and_key() (
 
   log_info "Requesting certificate from PKI engine"
   cert_json="$(
-    vault write -format=json pki_vault/issue/vault-server - <<EOF
+    vault write -format=json "$${VAULT_PKI_MOUNT_PATH}/issue/vault-server" - <<EOF
 {
   "common_name": "$${VAULT_FQDN}",
   "ttl": "$${VAULT_PKI_SERVER_CERT_TTL}"

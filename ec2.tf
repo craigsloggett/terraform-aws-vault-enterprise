@@ -86,6 +86,7 @@ resource "aws_launch_template" "vault" {
     vault_pki_vault_mount_max_ttl                      = var.vault_pki_vault_mount_max_ttl
     vault_pki_vault_server_role_max_ttl                = var.vault_pki_vault_server_role_max_ttl
     vault_pki_server_cert_ttl                          = var.vault_pki_server_cert_ttl
+    vault_pki_mount_path                               = var.vault_pki_mount_path
 
     # AWS Auth
     vault_iam_role_arn          = aws_iam_role.vault.arn

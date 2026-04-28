@@ -21,8 +21,11 @@ locals {
 
   config_vault_service          = file("${path.module}/files/vault/vault.service")
   config_vault_service_override = file("${path.module}/files/vault/vault.service.override.conf")
-  config_vault_server_policy    = file("${path.module}/files/policies/vault-server.hcl")
   config_vault_admin_policy     = file("${path.module}/files/policies/admin.hcl")
+
+  config_vault_server_policy = templatefile("${path.module}/templates/policies/vault-server.hcl.tftpl", {
+    vault_pki_mount_path = var.vault_pki_mount_path
+  })
 
   config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
     cluster_name            = var.project_name
@@ -47,12 +50,15 @@ locals {
   config_agent_service                 = file("${path.module}/files/agent/vault-agent.service")
   config_agent_reload_rules            = file("${path.module}/files/agent/vault-agent-reload.rules")
   config_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
+
   config_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
     vault_fqdn = trimsuffix(aws_route53_record.vault.fqdn, ".")
   })
 
   config_agent_server_tls_ctmpl = templatefile("${path.module}/templates/agent/vault-server-tls.ctmpl.tftpl", {
-    vault_fqdn = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    vault_fqdn                = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    vault_pki_mount_path      = var.vault_pki_mount_path
+    vault_pki_server_cert_ttl = var.vault_pki_server_cert_ttl
   })
 
   vpc = var.existing_vpc != null ? {
