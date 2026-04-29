@@ -82,7 +82,7 @@ resource "aws_vpc_endpoint" "s3" {
 
 resource "aws_security_group" "bastion" {
   name_prefix = "${var.project_name}-vault-bastion-"
-  description = "Security group for the Vault Enterprise bastion host"
+  description = "Vault Enterprise bastion host security group"
   vpc_id      = local.vpc.id
 
   tags = {
@@ -114,7 +114,7 @@ resource "aws_vpc_security_group_egress_rule" "bastion_all" {
 
 resource "aws_security_group" "vault" {
   name_prefix = "${var.project_name}-vault-"
-  description = "Security group for all Vault Enterprise nodes"
+  description = "Vault Enterprise servers security group"
   vpc_id      = local.vpc.id
 
   tags = {
@@ -175,7 +175,7 @@ resource "aws_security_group" "vpc_endpoints" {
   count = var.existing_vpc == null ? 1 : 0
 
   name_prefix = "${var.project_name}-vault-vpc-endpoints-"
-  description = "Security group for VPC endpoints"
+  description = "Vault Enterprise VPC endpoints security group"
   vpc_id      = module.vpc[0].vpc_id
 
   tags = {
