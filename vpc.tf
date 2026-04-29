@@ -4,7 +4,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "6.6.1"
 
-  name = "${var.project_name}-vault"
+  name = var.vault_aws_resource_names.vpc_name
   cidr = var.vpc_cidr
 
   azs             = slice(data.aws_availability_zones.available.names, 0, 3)
@@ -16,8 +16,6 @@ module "vpc" {
 
   enable_dns_hostnames = true
   enable_dns_support   = true
-
-  tags = var.common_tags
 }
 
 # VPC Endpoints
@@ -32,7 +30,9 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-secretsmanager" })
+  tags = {
+    Name = var.vault_aws_resource_names.secretsmanager_vpc_endpoint_name
+  }
 }
 
 resource "aws_vpc_endpoint" "kms" {
@@ -45,7 +45,9 @@ resource "aws_vpc_endpoint" "kms" {
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-kms" })
+  tags = {
+    Name = var.vault_aws_resource_names.kms_vpc_endpoint_name
+  }
 }
 
 resource "aws_vpc_endpoint" "ec2" {
@@ -58,7 +60,9 @@ resource "aws_vpc_endpoint" "ec2" {
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-ec2" })
+  tags = {
+    Name = var.vault_aws_resource_names.ec2_vpc_endpoint_name
+  }
 }
 
 resource "aws_vpc_endpoint" "s3" {
@@ -69,17 +73,21 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = module.vpc[0].private_route_table_ids
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-s3" })
+  tags = {
+    Name = var.vault_aws_resource_names.s3_vpc_endpoint_name
+  }
 }
 
 # Security Groups
 
 resource "aws_security_group" "bastion" {
   name_prefix = "${var.project_name}-vault-bastion-"
-  description = "Security group for the bastion host"
+  description = "Vault Enterprise bastion host security group"
   vpc_id      = local.vpc.id
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-bastion" })
+  tags = {
+    Name = var.vault_aws_resource_names.bastion_security_group_name
+  }
 
   lifecycle {
     create_before_destroy = true
@@ -106,10 +114,12 @@ resource "aws_vpc_security_group_egress_rule" "bastion_all" {
 
 resource "aws_security_group" "vault" {
   name_prefix = "${var.project_name}-vault-"
-  description = "Security group for Vault nodes"
+  description = "Vault Enterprise servers security group"
   vpc_id      = local.vpc.id
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault" })
+  tags = {
+    Name = var.vault_aws_resource_names.vault_servers_security_group_name
+  }
 
   lifecycle {
     create_before_destroy = true
@@ -118,7 +128,7 @@ resource "aws_security_group" "vault" {
 
 resource "aws_vpc_security_group_ingress_rule" "vault_api" {
   security_group_id = aws_security_group.vault.id
-  description       = "Vault API from VPC"
+  description       = "Vault Enterprise API from VPC"
   from_port         = 8200
   to_port           = 8200
   ip_protocol       = "tcp"
@@ -129,7 +139,7 @@ resource "aws_vpc_security_group_ingress_rule" "vault_api_external" {
   for_each = toset(var.vault_api_allowed_cidrs)
 
   security_group_id = aws_security_group.vault.id
-  description       = "Vault API from external CIDR"
+  description       = "Vault Enterprise API from external CIDR"
   from_port         = 8200
   to_port           = 8200
   ip_protocol       = "tcp"
@@ -138,7 +148,7 @@ resource "aws_vpc_security_group_ingress_rule" "vault_api_external" {
 
 resource "aws_vpc_security_group_ingress_rule" "vault_cluster" {
   security_group_id            = aws_security_group.vault.id
-  description                  = "Vault cluster traffic"
+  description                  = "Vault Enterprise cluster traffic"
   from_port                    = 8201
   to_port                      = 8201
   ip_protocol                  = "tcp"
@@ -147,7 +157,7 @@ resource "aws_vpc_security_group_ingress_rule" "vault_cluster" {
 
 resource "aws_vpc_security_group_ingress_rule" "vault_ssh" {
   security_group_id            = aws_security_group.vault.id
-  description                  = "SSH from bastion"
+  description                  = "SSH from the Vault Enterprise bastion host"
   from_port                    = 22
   to_port                      = 22
   ip_protocol                  = "tcp"
@@ -165,10 +175,12 @@ resource "aws_security_group" "vpc_endpoints" {
   count = var.existing_vpc == null ? 1 : 0
 
   name_prefix = "${var.project_name}-vault-vpc-endpoints-"
-  description = "Security group for VPC endpoints"
+  description = "Vault Enterprise VPC endpoints security group"
   vpc_id      = module.vpc[0].vpc_id
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-vpc-endpoints" })
+  tags = {
+    Name = var.vault_aws_resource_names.vpc_endpoints_security_group_name
+  }
 
   lifecycle {
     create_before_destroy = true

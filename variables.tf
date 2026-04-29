@@ -50,14 +50,6 @@ variable "hcp_terraform_jwt_auth" {
   })
 }
 
-# General
-
-variable "common_tags" {
-  type        = map(string)
-  description = "Tags to apply to all resources."
-  default     = {}
-}
-
 # VPC
 
 variable "vpc_cidr" {
@@ -160,6 +152,19 @@ variable "vault_audit_disk" {
   default = {
     volume_type = "gp3"
     volume_size = 50
+  }
+}
+
+variable "vault_cluster_auto_join_tag" {
+  type = object({
+    key   = optional(string, "vault:raft:retryjoin:autojoin")
+    value = string
+  })
+  description = "The Vault cluster EC2 tag_key and tag_value configuration used for AWS Cloud auto-join."
+
+  validation {
+    condition     = length(var.vault_cluster_auto_join_tag.value) > 0
+    error_message = "vault_cluster_auto_join_tag.value must be a non-empty string to prevent accidentally joining an existing cluster."
   }
 }
 
@@ -353,5 +358,31 @@ variable "vault_server_iam_resource_names" {
     ec2_describe_policy               = optional(string, "EC2DescribeAccess")
     ssm_read_write_policy             = optional(string, "SSMReadWriteAccess")
     iam_read_policy                   = optional(string, "IAMReadAccess")
+  })
+}
+
+# Tags
+
+variable "vault_aws_resource_names" {
+  description = <<-EOT
+    Values for the `Name` tag applied to AWS resources created by this module.
+    Each field is optional; consumers may override individual entries to avoid
+    collisions when deploying multiple instances of the module into the same
+    AWS account.
+  EOT
+  default     = {}
+  type = object({
+    bastion_instance_name             = optional(string, "vault-enterprise-bastion-host")
+    vault_server_instance_name        = optional(string, "vault-enterprise-server")
+    vault_server_volume_name          = optional(string, "vault-enterprise-server-volume")
+    vault_kms_key_name                = optional(string, "vault-enterprise-auto-unseal-key")
+    vpc_name                          = optional(string, "vault-enterprise-vpc")
+    secretsmanager_vpc_endpoint_name  = optional(string, "vault-enterprise-secretsmanager-vpc-endpoint")
+    kms_vpc_endpoint_name             = optional(string, "vault-enterprise-kms-vpc-endpoint")
+    ec2_vpc_endpoint_name             = optional(string, "vault-enterprise-ec2-vpc-endpoint")
+    s3_vpc_endpoint_name              = optional(string, "vault-enterprise-s3-vpc-endpoint")
+    bastion_security_group_name       = optional(string, "vault-enterprise-bastion-security-group")
+    vault_servers_security_group_name = optional(string, "vault-enterprise-servers-security-group")
+    vpc_endpoints_security_group_name = optional(string, "vault-enterprise-vpc-endpoints-security-group")
   })
 }

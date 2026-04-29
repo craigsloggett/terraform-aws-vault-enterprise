@@ -1,9 +1,11 @@
 resource "aws_kms_key" "vault" {
-  description             = "Vault auto-unseal key"
+  description             = "Vault Enterprise Auto-unseal Key"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
-  tags = merge(var.common_tags, { Name = "${var.project_name}-vault-unseal" })
+  tags = {
+    Name = var.vault_aws_resource_names.vault_kms_key_name
+  }
 }
 
 resource "aws_kms_alias" "vault" {
