@@ -4,7 +4,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "6.6.1"
 
-  name = "${var.project_name}-vault"
+  name = var.resource_names.vpc_name
   cidr = var.vpc_cidr
 
   azs             = slice(data.aws_availability_zones.available.names, 0, 3)
@@ -29,6 +29,10 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   subnet_ids          = module.vpc[0].private_subnets
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
+
+  tags = {
+    Name = var.resource_names.secretsmanager_vpc_endpoint_name
+  }
 }
 
 resource "aws_vpc_endpoint" "kms" {
@@ -40,6 +44,10 @@ resource "aws_vpc_endpoint" "kms" {
   subnet_ids          = module.vpc[0].private_subnets
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
+
+  tags = {
+    Name = var.resource_names.kms_vpc_endpoint_name
+  }
 }
 
 resource "aws_vpc_endpoint" "ec2" {
@@ -51,6 +59,10 @@ resource "aws_vpc_endpoint" "ec2" {
   subnet_ids          = module.vpc[0].private_subnets
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
+
+  tags = {
+    Name = var.resource_names.ec2_vpc_endpoint_name
+  }
 }
 
 resource "aws_vpc_endpoint" "s3" {
@@ -60,14 +72,22 @@ resource "aws_vpc_endpoint" "s3" {
   service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = module.vpc[0].private_route_table_ids
+
+  tags = {
+    Name = var.resource_names.s3_vpc_endpoint_name
+  }
 }
 
 # Security Groups
 
 resource "aws_security_group" "bastion" {
   name_prefix = "${var.project_name}-vault-bastion-"
-  description = "Security group for the bastion host"
+  description = "Security group for the Vault Enterprise bastion host"
   vpc_id      = local.vpc.id
+
+  tags = {
+    Name = var.resource_names.bastion_security_group_name
+  }
 
   lifecycle {
     create_before_destroy = true
@@ -94,8 +114,12 @@ resource "aws_vpc_security_group_egress_rule" "bastion_all" {
 
 resource "aws_security_group" "vault" {
   name_prefix = "${var.project_name}-vault-"
-  description = "Security group for Vault nodes"
+  description = "Security group for all Vault Enterprise nodes"
   vpc_id      = local.vpc.id
+
+  tags = {
+    Name = var.resource_names.vault_security_group_name
+  }
 
   lifecycle {
     create_before_destroy = true
@@ -104,7 +128,7 @@ resource "aws_security_group" "vault" {
 
 resource "aws_vpc_security_group_ingress_rule" "vault_api" {
   security_group_id = aws_security_group.vault.id
-  description       = "Vault API from VPC"
+  description       = "Vault Enterprise API from VPC"
   from_port         = 8200
   to_port           = 8200
   ip_protocol       = "tcp"
@@ -115,7 +139,7 @@ resource "aws_vpc_security_group_ingress_rule" "vault_api_external" {
   for_each = toset(var.vault_api_allowed_cidrs)
 
   security_group_id = aws_security_group.vault.id
-  description       = "Vault API from external CIDR"
+  description       = "Vault Enterprise API from external CIDR"
   from_port         = 8200
   to_port           = 8200
   ip_protocol       = "tcp"
@@ -124,7 +148,7 @@ resource "aws_vpc_security_group_ingress_rule" "vault_api_external" {
 
 resource "aws_vpc_security_group_ingress_rule" "vault_cluster" {
   security_group_id            = aws_security_group.vault.id
-  description                  = "Vault cluster traffic"
+  description                  = "Vault Enterprise cluster traffic"
   from_port                    = 8201
   to_port                      = 8201
   ip_protocol                  = "tcp"
@@ -133,7 +157,7 @@ resource "aws_vpc_security_group_ingress_rule" "vault_cluster" {
 
 resource "aws_vpc_security_group_ingress_rule" "vault_ssh" {
   security_group_id            = aws_security_group.vault.id
-  description                  = "SSH from bastion"
+  description                  = "SSH from the Vault Enterprise bastion host"
   from_port                    = 22
   to_port                      = 22
   ip_protocol                  = "tcp"
@@ -153,6 +177,10 @@ resource "aws_security_group" "vpc_endpoints" {
   name_prefix = "${var.project_name}-vault-vpc-endpoints-"
   description = "Security group for VPC endpoints"
   vpc_id      = module.vpc[0].vpc_id
+
+  tags = {
+    Name = var.resource_names.vpc_endpoints_security_group_name
+  }
 
   lifecycle {
     create_before_destroy = true

@@ -360,3 +360,27 @@ variable "vault_server_iam_resource_names" {
     iam_read_policy                   = optional(string, "IAMReadAccess")
   })
 }
+
+# Tags
+
+variable "resource_names" {
+  description = <<-EOT
+    Values for the `Name` tag applied to AWS resources created by this module.
+    Each field is optional; consumers may override individual entries to avoid
+    collisions when deploying multiple instances of the module into the same
+    AWS account.
+  EOT
+  default     = {}
+  type = object({
+    bastion_instance_name             = optional(string, "vault-enterprise-bastion-host")
+    vault_kms_key_name                = optional(string, "vault-enterprise-auto-unseal-key")
+    vpc_name                          = optional(string, "vault-enterprise-vpc")
+    secretsmanager_vpc_endpoint_name  = optional(string, "vault-enterprise-secretsmanager-vpc-endpoint")
+    kms_vpc_endpoint_name             = optional(string, "vault-enterprise-kms-vpc-endpoint")
+    ec2_vpc_endpoint_name             = optional(string, "vault-enterprise-ec2-vpc-endpoint")
+    s3_vpc_endpoint_name              = optional(string, "vault-enterprise-s3-vpc-endpoint")
+    bastion_security_group_name       = optional(string, "vault-enterprise-bastion-security-group")
+    vault_security_group_name         = optional(string, "vault-enterprise-security-group")
+    vpc_endpoints_security_group_name = optional(string, "vault-enterprise-vpc-endpoints-security-group")
+  })
+}

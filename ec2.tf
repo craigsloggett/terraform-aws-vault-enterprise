@@ -13,6 +13,10 @@ resource "aws_instance" "bastion" {
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
   }
+
+  tags = {
+    Name = var.resource_names.bastion_instance_name
+  }
 }
 
 # Vault Nodes
