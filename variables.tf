@@ -328,3 +328,30 @@ variable "vault_pki_mount_path" {
     error_message = "vault_pki_mount_path must contain only alphanumeric characters, underscores, and hyphens."
   }
 }
+
+# IAM
+
+variable "vault_server_iam_resource_names" {
+  description = <<-EOT
+    Names for the IAM resources created by this module. Each field is optional;
+    consumers are expected to set these to environment-appropriate values to
+    avoid collisions when deploying multiple instances of the module into the
+    same AWS account. Switching a name (or accepting a new default) replaces
+    the underlying AWS resource since IAM resource names are immutable.
+  EOT
+  default     = {}
+  type = object({
+    role                              = optional(string, "VaultServerRole")
+    instance_profile                  = optional(string, "VaultServerInstanceProfile")
+    kms_read_write_policy             = optional(string, "KMSReadWriteAccess")
+    kms_describe_policy               = optional(string, "KMSDescribeAccess")
+    secrets_manager_read_policy       = optional(string, "SecretsManagerReadAccess")
+    secrets_manager_describe_policy   = optional(string, "SecretsManagerDescribeAccess")
+    secrets_manager_read_write_policy = optional(string, "SecretsManagerReadWriteAccess")
+    s3_read_write_policy              = optional(string, "S3ObjectReadWriteAccess")
+    s3_list_policy                    = optional(string, "S3BucketListAccess")
+    ec2_describe_policy               = optional(string, "EC2DescribeAccess")
+    ssm_read_write_policy             = optional(string, "SSMReadWriteAccess")
+    iam_read_policy                   = optional(string, "IAMReadAccess")
+  })
+}
