@@ -145,12 +145,12 @@ variable "vault_cluster" {
 
 variable "nlb" {
   type = object({
-    name_prefix       = optional(string, "vault-enterprise-")
+    name_prefix       = optional(string, "vault-")
     internal          = optional(bool, true)
     api_allowed_cidrs = optional(list(string), [])
 
     lb_target_group = optional(object({
-      name_prefix = optional(string, "vault-enterprise-")
+      name_prefix = optional(string, "vault-")
     }), {})
   })
 
@@ -159,6 +159,11 @@ variable "nlb" {
     NLB configuration for the Vault API. `api_allowed_cidrs` is only effective
     when `internal` is false.
   EOT
+
+  validation {
+    condition     = length(var.nlb.name_prefix) <= 6
+    error_message = "nlb.name_prefix must be 6 characters or fewer."
+  }
 
   validation {
     condition     = alltrue([for cidr in var.nlb.api_allowed_cidrs : can(cidrhost(cidr, 0))])
