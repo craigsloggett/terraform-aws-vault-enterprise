@@ -21,14 +21,14 @@ resource "aws_instance" "bastion" {
 
 # Vault Nodes
 
-resource "aws_launch_template" "vault" {
+resource "aws_launch_template" "vault_enterprise" {
   name_prefix   = "${var.project_name}-vault-"
   image_id      = var.ami.id
   instance_type = var.vault_enterprise_servers.instance_type
   key_name      = var.key_pair.key_name
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.vault_server.name
+    name = aws_iam_instance_profile.vault_enterprise.name
   }
 
   network_interfaces {
@@ -66,32 +66,32 @@ resource "aws_launch_template" "vault" {
     bootstrap_tls_cert_secret_arn        = aws_secretsmanager_secret.bootstrap_tls_cert.arn
     bootstrap_tls_private_key_secret_arn = aws_secretsmanager_secret.bootstrap_tls_private_key.arn
 
-    # Cluster Coordination Configuration
-    vault_cluster_auto_join_tag_key       = local.vault_cluster_auto_join_tag_key
-    vault_cluster_auto_join_tag_value     = local.vault_cluster_auto_join_tag_value
-    vault_cluster_state_ssm_name          = aws_ssm_parameter.vault_cluster_state.name
-    vault_bootstrap_root_token_secret_arn = aws_secretsmanager_secret.vault_server_bootstrap_root_token.arn
-    vault_recovery_keys_secret_arn        = aws_secretsmanager_secret.vault_recovery_keys.arn
-    vault_minimum_quorum_size             = var.vault_enterprise_servers.node_count
+    # Bootstrap Coordination Configuration
+    vault_cluster_auto_join_tag_key        = local.vault_cluster_auto_join_tag_key
+    vault_cluster_auto_join_tag_value      = local.vault_cluster_auto_join_tag_value
+    bootstrap_cluster_state_name           = aws_ssm_parameter.bootstrap_cluster_state.name
+    bootstrap_pki_state_name               = aws_ssm_parameter.bootstrap_pki_state.name
+    bootstrap_pki_intermediate_ca_csr_name = aws_ssm_parameter.bootstrap_pki_intermediate_ca_csr.name
+    bootstrap_root_token_secret_arn        = aws_secretsmanager_secret.bootstrap_root_token.arn
+    recovery_keys_secret_arn               = aws_secretsmanager_secret.recovery_keys.arn
+    vault_minimum_quorum_size              = var.vault_enterprise_servers.node_count
 
     # PKI and TLS Configuration
-    vault_pki_state_ssm_name                           = aws_ssm_parameter.vault_pki_state.name
-    vault_tls_ca_bundle_ssm_name                       = aws_ssm_parameter.vault_tls_ca_bundle.name
+    tls_ca_bundle_name                                 = aws_ssm_parameter.tls_ca_bundle.name
     vault_pki_intermediate_ca_common_name              = var.vault_pki.intermediate_ca.common_name
     vault_pki_intermediate_ca_country                  = var.vault_pki.intermediate_ca.country
     vault_pki_intermediate_ca_organization             = var.vault_pki.intermediate_ca.organization
     vault_pki_intermediate_ca_key_type                 = var.vault_pki.intermediate_ca.key_type
     vault_pki_intermediate_ca_key_bits                 = var.vault_pki.intermediate_ca.key_bits
-    vault_pki_intermediate_ca_csr_ssm_name             = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
-    vault_pki_signed_intermediate_wait_timeout_seconds = var.vault_pki.signed_intermediate_wait_timeout_secs
-    vault_pki_intermediate_ca_signed_csr_secret_arn    = aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn
+    vault_pki_signed_intermediate_wait_timeout_seconds = var.vault_pki.signed_intermediate_wait_timeout_seconds
+    intermediate_ca_signed_csr_secret_arn              = aws_secretsmanager_secret.intermediate_ca_signed_csr.arn
     vault_pki_vault_mount_max_ttl                      = var.vault_pki.mount_max_ttl
     vault_pki_vault_server_role_max_ttl                = var.vault_pki.server_role_max_ttl
     vault_pki_server_cert_ttl                          = var.vault_pki.server_cert_ttl
     vault_pki_mount_path                               = var.vault_pki.mount_path
 
     # AWS Auth Configuration
-    vault_iam_role_arn          = aws_iam_role.vault_server.arn
+    vault_iam_role_arn          = aws_iam_role.vault_enterprise.arn
     vault_aws_auth_role_max_ttl = var.vault_auth.aws.role_max_ttl
     vault_aws_auth_role_ttl     = var.vault_auth.aws.role_ttl
 
@@ -168,8 +168,8 @@ resource "aws_launch_template" "vault" {
   }
 }
 
-resource "aws_autoscaling_group" "vault" {
-  name_prefix = "${var.project_name}-vault-"
+resource "aws_autoscaling_group" "vault_enterprise" {
+  name_prefix = "vault-enterprise-"
 
   min_size         = var.vault_enterprise_servers.node_count
   max_size         = var.vault_enterprise_servers.node_count
@@ -178,14 +178,14 @@ resource "aws_autoscaling_group" "vault" {
   vpc_zone_identifier = local.vpc.private_subnet_ids
 
   launch_template {
-    id      = aws_launch_template.vault.id
+    id      = aws_launch_template.vault_enterprise.id
     version = "$Latest"
   }
 
   health_check_type         = "ELB"
   health_check_grace_period = 900
 
-  target_group_arns = [aws_lb_target_group.vault.arn]
+  target_group_arns = [aws_lb_target_group.vault_enterprise.arn]
 
   instance_refresh {
     strategy = "Rolling"
@@ -208,7 +208,7 @@ resource "aws_autoscaling_group" "vault" {
   }
 
   depends_on = [
-    aws_iam_role_policy.vault_server_kms_read_write,
-    aws_iam_role_policy.vault_server_secrets_manager_read,
+    aws_iam_role_policy.kms_read_write,
+    aws_iam_role_policy.secrets_manager_read,
   ]
 }

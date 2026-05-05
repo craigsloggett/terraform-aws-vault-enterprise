@@ -1,11 +1,6 @@
 variable "project_name" {
   type        = string
   description = "Name prefix for all resources."
-
-  validation {
-    condition     = length(var.project_name) <= 16
-    error_message = "Must be 16 characters or fewer to fit within the 63-character S3 bucket name limit."
-  }
 }
 
 variable "vault_enterprise_license" {
@@ -19,6 +14,7 @@ variable "ami" {
     id   = string
     name = string
   })
+
   description = "AMI for EC2 instances. Must be Ubuntu or Debian-based. Accepts the result of an aws_ami data source directly."
 }
 
@@ -26,6 +22,7 @@ variable "key_pair" {
   type = object({
     key_name = string
   })
+
   description = "EC2 key pair for SSH access. Accepts the result of an aws_key_pair data source directly."
 }
 
@@ -34,6 +31,7 @@ variable "route53_zone" {
     zone_id = string
     name    = string
   })
+
   description = "Route 53 hosted zone for the Vault DNS record. Accepts the result of an aws_route53_zone data source directly."
 }
 
@@ -43,12 +41,14 @@ variable "vpc" {
     cidr            = optional(string, "10.0.0.0/16")
     private_subnets = optional(list(string), ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"])
     public_subnets  = optional(list(string), ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"])
+
     existing = optional(object({
       vpc_id             = string
       private_subnet_ids = list(string)
       public_subnet_ids  = list(string)
     }), null)
   })
+
   default     = {}
   description = <<-EOT
     VPC configuration. When `existing` is null (default), a new VPC is created
@@ -71,6 +71,7 @@ variable "vpc_endpoints" {
     ec2_name            = optional(string, "vault-enterprise-ec2-vpc-endpoint")
     s3_name             = optional(string, "vault-enterprise-s3-vpc-endpoint")
   })
+
   default     = {}
   description = <<-EOT
     Configuration for the VPC endpoints created by this module (Secrets Manager,
@@ -85,6 +86,7 @@ variable "bastion" {
     instance_type = optional(string, "t3.micro")
     allowed_cidrs = optional(list(string), ["0.0.0.0/0"])
   })
+
   default     = {}
   description = <<-EOT
     Bastion host configuration. `allowed_cidrs` defaults to 0.0.0.0/0 for lab
@@ -104,21 +106,25 @@ variable "vault_enterprise_servers" {
     instance_type    = optional(string, "m5.large")
     node_count       = optional(number, 3)
     root_volume_size = optional(number, 50)
+
     raft_data_disk = optional(object({
       volume_type = optional(string, "gp3")
       volume_size = optional(number, 50)
       iops        = optional(number, 3000)
       throughput  = optional(number, 125)
     }), {})
+
     audit_disk = optional(object({
       volume_type = optional(string, "gp3")
       volume_size = optional(number, 50)
     }), {})
+
     cluster_auto_join_tag = object({
       key   = optional(string, "vault:raft:retryjoin:autojoin")
       value = string
     })
   })
+
   description = "Configuration for the Vault Enterprise server EC2 instances and their EBS volumes."
 
   validation {
@@ -139,9 +145,15 @@ variable "vault_enterprise_servers" {
 
 variable "nlb" {
   type = object({
+    name_prefix       = optional(string, "vault-enterprise-")
     internal          = optional(bool, true)
     api_allowed_cidrs = optional(list(string), [])
+
+    lb_target_group = optional(object({
+      name_prefix = optional(string, "vault-enterprise-")
+    }), {})
   })
+
   default     = {}
   description = <<-EOT
     NLB configuration for the Vault API. `api_allowed_cidrs` is only effective
@@ -156,18 +168,21 @@ variable "nlb" {
 
 variable "kms_key" {
   type = object({
-    name = optional(string, "vault-enterprise-auto-unseal-key")
+    name  = optional(string, "vault-enterprise-auto-unseal-key")
+    alias = optional(string, "vault-enterprise-auto-unseal-key")
   })
+
   default     = {}
   description = "Configuration for the KMS key used for Vault auto-unseal."
 }
 
-variable "security_groups" {
+variable "security_group" {
   type = object({
     bastion_name_prefix       = optional(string, "vault-enterprise-bastion-sg-")
     vault_servers_name_prefix = optional(string, "vault-enterprise-servers-sg-")
     vpc_endpoints_name_prefix = optional(string, "vault-enterprise-vpc-endpoints-sg-")
   })
+
   default     = {}
   description = <<-EOT
     Name prefixes for the security groups created by this module. The AWS
@@ -180,6 +195,7 @@ variable "iam_role" {
   type = object({
     name = optional(string, "VaultEnterpriseServerRole")
     path = optional(string, "/")
+
     inline_policy_names = optional(object({
       kms_read_write             = optional(string, "KMSReadWriteAccess")
       kms_describe               = optional(string, "KMSDescribeAccess")
@@ -193,8 +209,8 @@ variable "iam_role" {
       iam_read                   = optional(string, "IAMReadAccess")
     }), {})
   })
-  default = {}
 
+  default     = {}
   description = <<-EOT
     IAM role configuration for the Vault Enterprise EC2 instances. The module
     creates one role with several inline policies attached. Defaults reflect the
@@ -249,8 +265,8 @@ variable "iam_instance_profile" {
     name = optional(string, "VaultEnterpriseServerInstanceProfile")
     path = optional(string, "/")
   })
-  default = {}
 
+  default     = {}
   description = <<-EOT
     IAM instance profile configuration for the Vault Enterprise EC2 instances.
     The module creates one instance profile and associates it with the IAM role
@@ -289,6 +305,7 @@ variable "route53_record" {
   type = object({
     subdomain = optional(string, "vault")
   })
+
   default     = {}
   description = <<-EOT
     Route 53 A record configuration. The record is created in the hosted zone
@@ -303,11 +320,44 @@ variable "route53_record" {
   }
 }
 
+variable "secretsmanager_secret" {
+  type = object({
+    vault_enterprise_license_name_prefix   = optional(string, "vault-enterprise-license-")
+    intermediate_ca_signed_csr_name_prefix = optional(string, "vault-enterprise-intermediate-ca-signed-csr-")
+    recovery_keys_name_prefix              = optional(string, "vault-enterprise-recovery-keys-")
+    bootstrap_root_token_name_prefix       = optional(string, "vault-enterprise-bootstrap-root-token")
+    bootstrap_tls_ca_name_prefix           = optional(string, "vault-enterprise-bootstrap-tls-ca-")
+    bootstrap_tls_cert_name_prefix         = optional(string, "vault-enterprise-bootstrap-tls-cert-")
+    bootstrap_tls_private_key_name_prefix  = optional(string, "vault-enterprise-bootstrap-tls-private-key-")
+  })
+
+  default     = {}
+  description = "Name prefixes for the Secrets Manager secrets created by this module."
+}
+
+variable "ssm_parameter" {
+  type = object({
+    bootstrap_cluster_state_name           = optional(string, "/vault/bootstrap/cluster/state")
+    bootstrap_pki_state_name               = optional(string, "/vault/bootstrap/pki/state")
+    bootstrap_pki_intermediate_ca_csr_name = optional(string, "/vault/bootstrap/pki/intermediate-ca-csr")
+    tls_ca_bundle_name                     = optional(string, "/vault/tls/ca-bundle")
+  })
+
+  default     = {}
+  description = "Names for the SSM parameters created by this module."
+}
+
 variable "vault" {
   type = object({
     enterprise_version = optional(string, "1.21.4+ent")
     cluster_name       = optional(string, "vault-enterprise")
+    snapshots = optional(object({
+      interval      = optional(number, 3600)
+      retain        = optional(number, 72)
+      aws_s3_bucket = optional(string, "vault-enterprise-snapshots")
+    }), {})
   })
+
   default     = {}
   description = "Vault Enterprise product configuration."
 
@@ -320,6 +370,16 @@ variable "vault" {
     condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9_-]*$", var.vault.cluster_name))
     error_message = "vault.cluster_name must start with an alphanumeric character and contain only alphanumeric characters, underscores, and hyphens."
   }
+
+  validation {
+    condition     = var.vault.snapshots.interval >= 60
+    error_message = "vault.snapshots.interval must be at least 60 seconds."
+  }
+
+  validation {
+    condition     = var.vault.snapshots.retain >= 1
+    error_message = "vault.snapshots.retain must be at least 1."
+  }
 }
 
 variable "vault_auth" {
@@ -328,11 +388,13 @@ variable "vault_auth" {
       role_ttl     = optional(string, "4h")
       role_max_ttl = optional(string, "24h")
     }), {})
+
     jwt = optional(object({
       role_ttl     = optional(string, "1h")
       role_max_ttl = optional(string, "2h")
     }), {})
   })
+
   default     = {}
   description = <<-EOT
     TTL configuration for Vault auth method roles. `vault_auth.aws` configures
@@ -344,7 +406,12 @@ variable "vault_auth" {
 
 variable "vault_pki" {
   type = object({
-    mount_path = optional(string, "pki_vault")
+    mount_path                               = optional(string, "pki_vault")
+    mount_max_ttl                            = optional(string, "26280h")
+    server_role_max_ttl                      = optional(string, "24h")
+    server_cert_ttl                          = optional(string, "24h")
+    signed_intermediate_wait_timeout_seconds = optional(number, 1800)
+
     intermediate_ca = optional(object({
       common_name  = optional(string, "Vault Intermediate CA")
       country      = optional(string, "")
@@ -352,11 +419,8 @@ variable "vault_pki" {
       key_type     = optional(string, "rsa")
       key_bits     = optional(number, 2048)
     }), {})
-    mount_max_ttl                         = optional(string, "26280h")
-    server_role_max_ttl                   = optional(string, "24h")
-    server_cert_ttl                       = optional(string, "24h")
-    signed_intermediate_wait_timeout_secs = optional(number, 1800)
   })
+
   default     = {}
   description = "Vault PKI secrets engine configuration."
 
@@ -381,33 +445,17 @@ variable "vault_pki" {
   }
 }
 
-variable "vault_snapshots" {
-  type = object({
-    interval      = optional(number, 3600)
-    retain        = optional(number, 72)
-    aws_s3_bucket = optional(string, "vault-enterprise-snapshots")
-  })
-  default     = {}
-  description = <<-EOT
-    Vault Raft snapshot configuration. The module creates an S3 bucket for
-    snapshot storage; bucket configuration beyond `name` is derived from the
-    module's other inputs (KMS key, VPC, etc.) and is not exposed. Note that
-    S3 bucket names are globally unique across all AWS accounts; consumers
-    deploying multiple instances of this module must override the default.
-  EOT
-
-  validation {
-    condition     = var.vault_snapshots.interval >= 60
-    error_message = "vault_snapshots.interval must be at least 60 seconds."
-  }
-
-  validation {
-    condition     = var.vault_snapshots.retain >= 1
-    error_message = "vault_snapshots.retain must be at least 1."
-  }
-}
-
 variable "hcp_terraform_jwt_auth" {
+  type = object({
+    hostname              = optional(string, "app.terraform.io")
+    organization_name     = optional(string, "")
+    workspace_id          = optional(string, "")
+    oidc_discovery_ca_pem = optional(string, "")
+    mount_path            = optional(string, "app-terraform-io")
+    role_name             = optional(string, "hcp-terraform")
+  })
+
+  default     = {}
   description = <<-EOT
     Configuration for the HCP Terraform JWT auth method that provides
     dynamic, short-lived Vault credentials to HCP Terraform workspaces.
@@ -417,13 +465,4 @@ variable "hcp_terraform_jwt_auth" {
     `role_name` is created against that mount with `bound_claims`
     restricting authentication to the declared organization and workspace.
   EOT
-  default     = {}
-  type = object({
-    hostname              = optional(string, "app.terraform.io")
-    organization_name     = optional(string, "")
-    workspace_id          = optional(string, "")
-    oidc_discovery_ca_pem = optional(string, "")
-    mount_path            = optional(string, "app-terraform-io")
-    role_name             = optional(string, "terraform-admin")
-  })
 }

@@ -15,22 +15,22 @@ output "bastion_public_ip" {
 
 output "vault_asg_name" {
   description = "Name of the Vault Auto Scaling Group."
-  value       = aws_autoscaling_group.vault.name
+  value       = aws_autoscaling_group.vault_enterprise.name
 }
 
 output "vault_kms_key_id" {
   description = "KMS key ID used for Vault auto-unseal."
-  value       = aws_kms_key.vault.key_id
+  value       = aws_kms_key.auto_unseal.key_id
 }
 
 output "vault_snapshots_bucket" {
   description = "S3 bucket for Vault snapshots."
-  value       = aws_s3_bucket.vault_snapshots.id
+  value       = aws_s3_bucket.snapshots.id
 }
 
 output "vault_target_group_arn" {
   description = "ARN of the Vault NLB target group."
-  value       = aws_lb_target_group.vault.arn
+  value       = aws_lb_target_group.vault_enterprise.arn
 }
 
 output "ec2_ami_name" {
@@ -40,12 +40,12 @@ output "ec2_ami_name" {
 
 output "vault_tls_ca_bundle_ssm_parameter_name" {
   description = "SSM Parameter for the Vault PKI managed TLS CA bundle."
-  value       = aws_ssm_parameter.vault_tls_ca_bundle.name
+  value       = aws_ssm_parameter.tls_ca_bundle.name
 }
 
 output "vault_iam_role_name" {
   description = "Name of the Vault server IAM role."
-  value       = aws_iam_role.vault_server.name
+  value       = aws_iam_role.vault_enterprise.name
 }
 
 output "vault_jwt_auth_path" {
@@ -60,10 +60,10 @@ output "vault_jwt_auth_role_name" {
 
 output "vault_pki_intermediate_ca_csr_ssm_parameter_name" {
   description = "SSM parameter name where the intermediate CA CSR is published."
-  value       = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
+  value       = aws_ssm_parameter.bootstrap_pki_intermediate_ca_csr.name
 }
 
 output "vault_pki_intermediate_ca_signed_csr_secret_arn" {
   description = "Secrets Manager ARN for the signed CSR and root CA PEM."
-  value       = aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn
+  value       = aws_secretsmanager_secret.intermediate_ca_signed_csr.arn
 }

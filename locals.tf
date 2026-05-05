@@ -39,18 +39,18 @@ locals {
 
   config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
     cluster_name                      = var.vault.cluster_name
-    vault_fqdn                        = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    vault_fqdn                        = trimsuffix(aws_route53_record.vault_enterprise.fqdn, ".")
     aws_region                        = data.aws_region.current.region
-    kms_key_alias                     = aws_kms_alias.vault.name
+    kms_key_alias                     = aws_kms_alias.auto_unseal.name
     vault_cluster_auto_join_tag_key   = local.vault_cluster_auto_join_tag_key
     vault_cluster_auto_join_tag_value = local.vault_cluster_auto_join_tag_value
   })
 
   config_vault_snapshot_json = templatefile("${path.module}/templates/vault/snapshot.json.tftpl", {
-    aws_s3_bucket = aws_s3_bucket.vault_snapshots.id
+    aws_s3_bucket = aws_s3_bucket.snapshots.id
     aws_s3_region = data.aws_region.current.region
-    interval      = var.vault_snapshots.interval
-    retain        = var.vault_snapshots.retain
+    interval      = var.vault.snapshots.interval
+    retain        = var.vault.snapshots.retain
   })
 
   # Cluster Coordination Configuration
@@ -63,11 +63,11 @@ locals {
   config_vault_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
 
   config_vault_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
-    vault_fqdn = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    vault_fqdn = trimsuffix(aws_route53_record.vault_enterprise.fqdn, ".")
   })
 
   config_vault_agent_server_tls_ctmpl = templatefile("${path.module}/templates/agent/vault-server-tls.ctmpl.tftpl", {
-    vault_fqdn                = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    vault_fqdn                = trimsuffix(aws_route53_record.vault_enterprise.fqdn, ".")
     vault_pki_mount_path      = var.vault_pki.mount_path
     vault_pki_server_cert_ttl = var.vault_pki.server_cert_ttl
   })

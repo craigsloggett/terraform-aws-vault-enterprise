@@ -1,5 +1,5 @@
-resource "aws_ssm_parameter" "vault_tls_ca_bundle" {
-  name        = "/${var.project_name}/vault/tls/ca-bundle"
+resource "aws_ssm_parameter" "tls_ca_bundle" {
+  name        = var.ssm_parameter.tls_ca_bundle_name
   type        = "String"
   value       = "EMPTY"
   description = "Vault PKI Managed TLS CA Bundle"
