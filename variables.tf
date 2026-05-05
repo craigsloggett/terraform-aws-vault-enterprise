@@ -49,8 +49,7 @@ variable "vpc" {
     VPC configuration. When `existing` is null (default), a new VPC is created
     using `cidr`, `private_subnets`, and `public_subnets`. When `existing` is
     set, those creation fields are ignored and the supplied VPC is used. The
-    supplied VPC must have the required VPC endpoints configured (Secrets
-    Manager, KMS, EC2 Interface; S3 Gateway).
+    supplied VPC must have the required VPC endpoints configured.
   EOT
 
   validation {
