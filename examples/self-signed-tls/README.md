@@ -65,7 +65,7 @@ Vault PKI intermediate CA certificate during the bootstrap process.
 
 | Name | Source | Version |
 | ---- | ------ | ------- |
-| <a name="module_vault"></a> [vault](#module\_vault) | git::https://github.com/craigsloggett/terraform-aws-vault-enterprise | 9acdcceae57f84fc46e74e25bcb6527e0491c605 |
+| <a name="module_vault"></a> [vault](#module\_vault) | git::https://github.com/craigsloggett/terraform-aws-vault-enterprise | n/a |
 
 ## Resources
 
