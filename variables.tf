@@ -97,7 +97,7 @@ variable "bastion" {
 variable "vault_cluster" {
   type = object({
     instance_type    = optional(string, "m5.large")
-    node_count       = optional(number, 3)
+    node_count       = optional(number, 5)
     root_volume_size = optional(number, 50)
 
     raft_data_disk = optional(object({
@@ -195,7 +195,7 @@ variable "security_group" {
       name_prefix = optional(string, "vault-enterprise-bastion-sg-")
     }), {})
 
-    vault_servers = optional(object({
+    vault_enterprise_servers = optional(object({
       name_prefix = optional(string, "vault-enterprise-servers-sg-")
     }), {})
 

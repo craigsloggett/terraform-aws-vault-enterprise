@@ -33,7 +33,7 @@ resource "aws_launch_template" "vault_enterprise" {
 
   network_interfaces {
     associate_public_ip_address = false
-    security_groups             = [aws_security_group.vault_enterprise.id]
+    security_groups             = [aws_security_group.vault_enterprise_servers.id]
     delete_on_termination       = true
   }
 
