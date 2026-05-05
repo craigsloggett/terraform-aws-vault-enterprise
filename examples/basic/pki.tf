@@ -60,7 +60,7 @@ data "aws_ssm_parameter" "vault_pki_intermediate_ca_csr" {
   depends_on = [terraform_data.wait_for_csr]
 }
 
-resource "tls_locally_signed_cert" "vault_pki_intermediate_ca_signed_csr" {
+resource "tls_locally_signed_cert" "vault_pki_signed_intermediate_ca" {
   cert_request_pem   = data.aws_ssm_parameter.vault_pki_intermediate_ca_csr.value
   ca_private_key_pem = tls_private_key.root_ca.private_key_pem
   ca_cert_pem        = tls_self_signed_cert.root_ca.cert_pem
@@ -74,10 +74,10 @@ resource "tls_locally_signed_cert" "vault_pki_intermediate_ca_signed_csr" {
   ]
 }
 
-resource "aws_secretsmanager_secret_version" "vault_pki_intermediate_ca_signed_csr" {
-  secret_id = module.vault.vault_pki_intermediate_ca_signed_csr_secret_arn
+resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" {
+  secret_id = module.vault.vault_pki_signed_intermediate_ca_secret_arn
   secret_string = jsonencode({
-    certificate = tls_locally_signed_cert.vault_pki_intermediate_ca_signed_csr.cert_pem
+    certificate = tls_locally_signed_cert.vault_pki_signed_intermediate_ca.cert_pem
     ca_chain    = tls_self_signed_cert.root_ca.cert_pem
   })
 }

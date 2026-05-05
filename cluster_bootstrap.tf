@@ -93,21 +93,6 @@ resource "aws_secretsmanager_secret_version" "bootstrap_tls_private_key" {
   secret_string = tls_private_key.bootstrap_tls_private_key.private_key_pem
 }
 
-resource "aws_secretsmanager_secret" "root_token" {
-  name_prefix = var.bootstrap.secretsmanager_secret.root_token_name_prefix
-  description = "Vault Enterprise Root Token"
-}
-
-resource "aws_secretsmanager_secret" "intermediate_ca_signed_csr" {
-  name_prefix = var.bootstrap.secretsmanager_secret.intermediate_ca_signed_csr_name_prefix
-  description = "Vault Enterprise Intermediate CA and Signed CSR"
-}
-
-resource "aws_secretsmanager_secret" "recovery_keys" {
-  name_prefix = var.bootstrap.secretsmanager_secret.recovery_keys_name_prefix
-  description = "Vault Enterprise Recovery Keys"
-}
-
 # Initialization Coordination SSM Parameters
 
 resource "aws_ssm_parameter" "bootstrap_cluster_state" {

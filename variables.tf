@@ -326,7 +326,9 @@ variable "vault" {
     cluster_name = optional(string, "vault-enterprise")
 
     secretsmanager_secret = optional(object({
-      license_name_prefix = optional(string, "vault-enterprise-license-")
+      license_name_prefix       = optional(string, "vault-enterprise-license-")
+      recovery_keys_name_prefix = optional(string, "vault-enterprise-recovery-keys-")
+      root_token_name_prefix    = optional(string, "vault-enterprise-root-token-")
     }), {})
 
     snapshots = optional(object({
@@ -390,6 +392,10 @@ variable "vault_pki" {
     server_cert_ttl                          = optional(string, "24h")
     signed_intermediate_wait_timeout_seconds = optional(number, 1800)
 
+    secretsmanager_secret = optional(object({
+      signed_intermediate_ca_name_prefix = optional(string, "vault-enterprise-signed-intermediate-ca-")
+    }), {})
+
     ssm_parameter = optional(object({
       tls_ca_bundle_name = optional(string, "/vault-enterprise/tls/ca-bundle")
     }), {})
@@ -430,12 +436,9 @@ variable "vault_pki" {
 variable "bootstrap" {
   type = object({
     secretsmanager_secret = optional(object({
-      intermediate_ca_signed_csr_name_prefix = optional(string, "vault-enterprise-intermediate-ca-signed-csr-")
-      recovery_keys_name_prefix              = optional(string, "vault-enterprise-recovery-keys-")
-      root_token_name_prefix                 = optional(string, "vault-enterprise-root-token")
-      tls_ca_name_prefix                     = optional(string, "vault-enterprise-bootstrap-tls-ca-")
-      tls_cert_name_prefix                   = optional(string, "vault-enterprise-bootstrap-tls-cert-")
-      tls_private_key_name_prefix            = optional(string, "vault-enterprise-bootstrap-tls-private-key-")
+      tls_ca_name_prefix          = optional(string, "vault-enterprise-bootstrap-tls-ca-")
+      tls_cert_name_prefix        = optional(string, "vault-enterprise-bootstrap-tls-cert-")
+      tls_private_key_name_prefix = optional(string, "vault-enterprise-bootstrap-tls-private-key-")
     }), {})
 
     ssm_parameter = optional(object({
@@ -447,11 +450,10 @@ variable "bootstrap" {
 
   default     = {}
   description = <<-EOT
-    AWS resources used during the Vault bootstrap ceremony. Secrets Manager
-    secrets hold sensitive ceremony material (recovery keys, initial root token,
-    bootstrap TLS, signed intermediate CA returned by the offline CA); SSM
-    parameters hold non-sensitive coordination state and the intermediate CA
-    CSR exchanged out-of-band.
+    AWS resources used only during the Vault bootstrap ceremony. Secrets Manager
+    secrets hold ephemeral bootstrap TLS material that Vault-issued certificates
+    replace post-bootstrap; SSM parameters hold non-sensitive coordination state
+    and the intermediate CA CSR exchanged out-of-band.
   EOT
 }
 

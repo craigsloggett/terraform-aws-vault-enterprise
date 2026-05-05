@@ -69,7 +69,7 @@ data "aws_iam_policy_document" "secrets_manager_read" {
       aws_secretsmanager_secret.bootstrap_tls_cert.arn,
       aws_secretsmanager_secret.bootstrap_tls_private_key.arn,
       aws_secretsmanager_secret.license.arn,
-      aws_secretsmanager_secret.intermediate_ca_signed_csr.arn
+      aws_secretsmanager_secret.signed_intermediate_ca.arn
     ]
   }
 }
@@ -82,10 +82,10 @@ resource "aws_iam_role_policy" "secrets_manager_read" {
 
 data "aws_iam_policy_document" "secrets_manager_describe" {
   statement {
-    sid       = "IntermediateCASignedCSRPolling"
+    sid       = "SignedIntermediateCAPolling"
     effect    = "Allow"
     actions   = ["secretsmanager:DescribeSecret"]
-    resources = [aws_secretsmanager_secret.intermediate_ca_signed_csr.arn]
+    resources = [aws_secretsmanager_secret.signed_intermediate_ca.arn]
   }
 }
 

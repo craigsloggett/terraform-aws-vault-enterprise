@@ -73,7 +73,7 @@ readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="${vault_pki_vault_mount_max_ttl}"
 readonly VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL="${vault_pki_vault_server_role_max_ttl}"
 readonly VAULT_PKI_SERVER_CERT_TTL="${vault_pki_server_cert_ttl}"
 readonly TLS_CA_BUNDLE_NAME="${tls_ca_bundle_name}"
-readonly INTERMEDIATE_CA_SIGNED_CSR_SECRET_ARN="${intermediate_ca_signed_csr_secret_arn}"
+readonly SIGNED_INTERMEDIATE_CA_SECRET_ARN="${signed_intermediate_ca_secret_arn}"
 readonly VAULT_PKI_INTERMEDIATE_CA_COMMON_NAME="${vault_pki_intermediate_ca_common_name}"
 readonly VAULT_PKI_INTERMEDIATE_CA_COUNTRY="${vault_pki_intermediate_ca_country}"
 readonly VAULT_PKI_INTERMEDIATE_CA_ORGANIZATION="${vault_pki_intermediate_ca_organization}"
@@ -856,7 +856,7 @@ wait_for_signed_pki_intermediate() (
     attempt=$((attempt + 1))
 
     secret_value="$(aws secretsmanager get-secret-value \
-      --secret-id "$${INTERMEDIATE_CA_SIGNED_CSR_SECRET_ARN}" \
+      --secret-id "$${SIGNED_INTERMEDIATE_CA_SECRET_ARN}" \
       --query SecretString --output text 2>/dev/null)" || secret_value=""
 
     if [ -n "$${secret_value}" ] && printf '%s' "$${secret_value}" | jq -e '.certificate' >/dev/null 2>&1; then
@@ -866,12 +866,12 @@ wait_for_signed_pki_intermediate() (
     sleep "$${interval}"
   done
 
-  log_error "Timed out after $${VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS}s waiting for signed intermediate at $${INTERMEDIATE_CA_SIGNED_CSR_SECRET_ARN}"
+  log_error "Timed out after $${VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS}s waiting for signed intermediate at $${SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
   return 1
 )
 
 fetch_signed_pki_intermediate() (
-  fetch_secret "$${INTERMEDIATE_CA_SIGNED_CSR_SECRET_ARN}"
+  fetch_secret "$${SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
 )
 
 import_signed_pki_intermediate() (

@@ -84,7 +84,7 @@ resource "aws_launch_template" "vault_enterprise" {
     vault_pki_intermediate_ca_key_type                 = var.vault_pki.intermediate_ca.key_type
     vault_pki_intermediate_ca_key_bits                 = var.vault_pki.intermediate_ca.key_bits
     vault_pki_signed_intermediate_wait_timeout_seconds = var.vault_pki.signed_intermediate_wait_timeout_seconds
-    intermediate_ca_signed_csr_secret_arn              = aws_secretsmanager_secret.intermediate_ca_signed_csr.arn
+    signed_intermediate_ca_secret_arn                  = aws_secretsmanager_secret.signed_intermediate_ca.arn
     vault_pki_vault_mount_max_ttl                      = var.vault_pki.mount_max_ttl
     vault_pki_vault_server_role_max_ttl                = var.vault_pki.server_role_max_ttl
     vault_pki_server_cert_ttl                          = var.vault_pki.server_cert_ttl
