@@ -1,8 +1,3 @@
-variable "project_name" {
-  type        = string
-  description = "Name prefix for all resources."
-}
-
 variable "vault_enterprise_license" {
   type        = string
   description = "Vault Enterprise license string."
@@ -101,8 +96,6 @@ variable "bastion" {
 
 variable "vault_cluster" {
   type = object({
-    instance_name    = optional(string, "vault-enterprise-server")
-    volume_name      = optional(string, "vault-enterprise-server-volume")
     instance_type    = optional(string, "m5.large")
     node_count       = optional(number, 3)
     root_volume_size = optional(number, 50)
@@ -123,6 +116,16 @@ variable "vault_cluster" {
       key   = optional(string, "vault:raft:retryjoin:autojoin")
       value = string
     })
+
+    launch_template = optional(object({
+      name_prefix = optional(string, "vault-enterprise-")
+      volume_name = optional(string, "vault-enterprise-volume")
+    }), {})
+
+    autoscaling_group = optional(object({
+      name_prefix   = optional(string, "vault-enterprise-")
+      instance_name = optional(string, "vault-enterprise")
+    }), {})
   })
 
   description = "Configuration for the Vault Enterprise server EC2 instances and their EBS volumes."

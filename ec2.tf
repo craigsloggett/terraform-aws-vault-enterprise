@@ -22,7 +22,7 @@ resource "aws_instance" "bastion" {
 # Vault Nodes
 
 resource "aws_launch_template" "vault_enterprise" {
-  name_prefix   = "${var.project_name}-vault-"
+  name_prefix   = var.vault_cluster.launch_template.name_prefix
   image_id      = var.ami.id
   instance_type = var.vault_cluster.instance_type
   key_name      = var.key_pair.key_name
@@ -154,7 +154,7 @@ resource "aws_launch_template" "vault_enterprise" {
     resource_type = "volume"
 
     tags = {
-      Name = var.vault_cluster.volume_name
+      Name = var.vault_cluster.launch_template.volume_name
     }
   }
 
@@ -169,7 +169,7 @@ resource "aws_launch_template" "vault_enterprise" {
 }
 
 resource "aws_autoscaling_group" "vault_enterprise" {
-  name_prefix = "vault-enterprise-"
+  name_prefix = var.vault_cluster.autoscaling_group.name_prefix
 
   min_size         = var.vault_cluster.node_count
   max_size         = var.vault_cluster.node_count
@@ -203,7 +203,7 @@ resource "aws_autoscaling_group" "vault_enterprise" {
 
   tag {
     key                 = "Name"
-    value               = var.vault_cluster.instance_name
+    value               = var.vault_cluster.autoscaling_group.instance_name
     propagate_at_launch = true
   }
 

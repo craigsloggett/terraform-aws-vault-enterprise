@@ -11,8 +11,8 @@ resource "tls_self_signed_cert" "bootstrap_tls_ca" {
   private_key_pem = tls_private_key.bootstrap_tls_ca_private_key.private_key_pem
 
   subject {
-    common_name  = "${var.project_name} CA"
-    organization = var.project_name
+    common_name  = "Vault Bootstrap CA"
+    organization = "HashiCorp Vault"
   }
 
   validity_period_hours = 24
@@ -36,7 +36,7 @@ resource "tls_cert_request" "bootstrap_tls_cert_request" {
 
   subject {
     common_name  = local.vault_fqdn
-    organization = var.project_name
+    organization = "HashiCorp Vault"
   }
 
   dns_names = [
