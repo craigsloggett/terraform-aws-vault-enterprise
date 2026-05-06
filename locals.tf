@@ -38,7 +38,14 @@ locals {
   })
 
   config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
+    ui                                = var.vault.ui
+    disable_mlock                     = var.vault.disable_mlock
     cluster_name                      = var.vault.cluster_name
+    log_level                         = var.vault.log_level
+    log_format                        = var.vault.log_format
+    tls_min_version                   = var.vault.listener_tcp.tls_min_version
+    prometheus_retention_time         = var.vault.telemetry.prometheus_retention_time
+    disable_hostname                  = var.vault.telemetry.disable_hostname
     vault_fqdn                        = local.vault_fqdn
     aws_region                        = data.aws_region.current.region
     kms_key_alias                     = aws_kms_alias.auto_unseal.name
@@ -49,8 +56,10 @@ locals {
   config_vault_snapshot_json = templatefile("${path.module}/templates/vault/snapshot.json.tftpl", {
     aws_s3_bucket = aws_s3_bucket.snapshots.id
     aws_s3_region = data.aws_region.current.region
-    interval      = var.vault.snapshots.interval
-    retain        = var.vault.snapshots.retain
+    path_prefix   = var.vault_snapshot.path_prefix
+    file_prefix   = var.vault_snapshot.file_prefix
+    interval      = var.vault_snapshot.interval
+    retain        = var.vault_snapshot.retain
   })
 
   # Cluster Coordination Configuration

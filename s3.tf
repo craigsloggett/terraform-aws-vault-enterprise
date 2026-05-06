@@ -1,7 +1,12 @@
 resource "aws_s3_bucket" "snapshots" {
-  bucket           = "${var.vault.snapshots.aws_s3_bucket}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}-an"
+  bucket = format(
+    "%s-%s-%s-an",
+    var.vault_snapshot.aws_s3_bucket.name_prefix,
+    data.aws_caller_identity.current.account_id,
+    data.aws_region.current.region
+  )
   bucket_namespace = "account-regional"
-  force_destroy    = true
+  force_destroy    = var.vault_snapshot.aws_s3_bucket.force_destroy
 }
 
 resource "aws_s3_bucket_versioning" "snapshots" {

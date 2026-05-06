@@ -336,19 +336,27 @@ variable "route53_record" {
 
 variable "vault" {
   type = object({
-    version      = optional(string, "1.21.4+ent")
-    cluster_name = optional(string, "vault-enterprise")
+    version       = optional(string, "1.21.4+ent")
+    ui            = optional(bool, true)
+    disable_mlock = optional(bool, true)
+    cluster_name  = optional(string, "vault-enterprise")
+
+    log_level  = optional(string, "info")
+    log_format = optional(string, "json")
+
+    listener_tcp = optional(object({
+      tls_min_version = optional(string, "tls13")
+    }), {})
+
+    telemetry = optional(object({
+      prometheus_retention_time = optional(string, "24h")
+      disable_hostname          = optional(bool, true)
+    }), {})
 
     secretsmanager_secret = optional(object({
       license_name_prefix       = optional(string, "vault-enterprise-license-")
       recovery_keys_name_prefix = optional(string, "vault-enterprise-recovery-keys-")
       root_token_name_prefix    = optional(string, "vault-enterprise-root-token-")
-    }), {})
-
-    snapshots = optional(object({
-      interval      = optional(number, 3600)
-      retain        = optional(number, 72)
-      aws_s3_bucket = optional(string, "vault-enterprise-snapshots")
     }), {})
   })
 
@@ -364,15 +372,31 @@ variable "vault" {
     condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9_-]*$", var.vault.cluster_name))
     error_message = "vault.cluster_name must start with an alphanumeric character and contain only alphanumeric characters, underscores, and hyphens."
   }
+}
+
+variable "vault_snapshot" {
+  type = object({
+    aws_s3_bucket = optional(object({
+      name_prefix   = optional(string, "vault-enterprise-snapshots-")
+      force_destroy = optional(bool, false)
+    }), {})
+    path_prefix = optional(string, "snapshots/")
+    file_prefix = optional(string, "vault-snapshot")
+    interval    = optional(number, 3600)
+    retain      = optional(number, 72)
+  })
+
+  default     = {}
+  description = "Vault Enterprise snapshot configuration."
 
   validation {
-    condition     = var.vault.snapshots.interval >= 60
-    error_message = "vault.snapshots.interval must be at least 60 seconds."
+    condition     = var.vault_snapshot.interval >= 60
+    error_message = "vault_snapshot.interval must be at least 60 seconds."
   }
 
   validation {
-    condition     = var.vault.snapshots.retain >= 1
-    error_message = "vault.snapshots.retain must be at least 1."
+    condition     = var.vault_snapshot.retain >= 1
+    error_message = "vault_snapshot.retain must be at least 1."
   }
 }
 
