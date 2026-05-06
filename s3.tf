@@ -1,6 +1,6 @@
 resource "aws_s3_bucket" "snapshots" {
   bucket = format(
-    "%s-%s-%s-an",
+    "%s%s-%s-an",
     var.vault_snapshot.aws_s3_bucket.name_prefix,
     data.aws_caller_identity.current.account_id,
     data.aws_region.current.region
