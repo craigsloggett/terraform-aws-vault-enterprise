@@ -796,7 +796,7 @@ configure_pki_vault_secrets_engine() (
   log_info "Enabling Vault PKI secrets engine"
 
   if ! vault secrets list -format=json | jq -e --arg path "$${VAULT_PKI_MOUNT_PATH}/" '.[$path]' >/dev/null 2>&1; then
-    vault secrets enable -path="$${VAULT_PKI_MOUNT_PATH}" pki
+    vault secrets enable -path="$${VAULT_PKI_MOUNT_PATH}" -description="issues TLS leaf certificates for Vault cluster nodes" pki
   fi
 
   vault secrets tune -max-lease-ttl="$${VAULT_PKI_VAULT_MOUNT_MAX_TTL}" "$${VAULT_PKI_MOUNT_PATH}" >/dev/null
@@ -1079,7 +1079,7 @@ enable_aws_auth_method() (
   log_info "Enabling Vault AWS auth method"
 
   if ! vault auth list -format=json | jq -e '."aws/"' >/dev/null 2>&1; then
-    vault auth enable aws
+    vault auth enable -description="authenticates AWS resources via IAM identity" aws
   fi
 
   log_info "Vault AWS auth method enabled"
@@ -1107,7 +1107,7 @@ enable_jwt_auth_method() (
   log_info "Enabling Vault JWT auth method"
 
   if ! vault auth list -format=json | jq -e ".\"$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}/\"" >/dev/null 2>&1; then
-    vault auth enable -path="$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}" jwt
+    vault auth enable -path="$${HCP_TERRAFORM_JWT_AUTH_MOUNT_PATH}" -description="authenticates HCP Terraform workspace runs via workload identity" jwt
   fi
 )
 
