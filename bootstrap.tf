@@ -11,8 +11,8 @@ resource "tls_self_signed_cert" "bootstrap_tls_ca" {
   private_key_pem = tls_private_key.bootstrap_tls_ca_private_key.private_key_pem
 
   subject {
-    common_name  = "${var.project_name} CA"
-    organization = var.project_name
+    common_name  = "Vault Bootstrap CA"
+    organization = "HashiCorp Vault"
   }
 
   validity_period_hours = 24
@@ -36,7 +36,7 @@ resource "tls_cert_request" "bootstrap_tls_cert_request" {
 
   subject {
     common_name  = local.vault_fqdn
-    organization = var.project_name
+    organization = "HashiCorp Vault"
   }
 
   dns_names = [
@@ -64,8 +64,8 @@ resource "tls_locally_signed_cert" "bootstrap_tls_cert" {
 # Secrets Manager
 
 resource "aws_secretsmanager_secret" "bootstrap_tls_ca" {
-  name_prefix = "${var.project_name}-vault-bootstrap-tls-ca-"
-  description = "Vault Bootstrap TLS CA"
+  name_prefix = var.bootstrap.secretsmanager_secret.tls_ca_name_prefix
+  description = "Vault Enterprise Bootstrap TLS CA"
 }
 
 resource "aws_secretsmanager_secret_version" "bootstrap_tls_ca" {
@@ -74,8 +74,8 @@ resource "aws_secretsmanager_secret_version" "bootstrap_tls_ca" {
 }
 
 resource "aws_secretsmanager_secret" "bootstrap_tls_cert" {
-  name_prefix = "${var.project_name}-vault-bootstrap-tls-cert-"
-  description = "Vault Bootstrap TLS Certificate"
+  name_prefix = var.bootstrap.secretsmanager_secret.tls_cert_name_prefix
+  description = "Vault Enterprise Bootstrap TLS Certificate"
 }
 
 resource "aws_secretsmanager_secret_version" "bootstrap_tls_cert" {
@@ -84,8 +84,8 @@ resource "aws_secretsmanager_secret_version" "bootstrap_tls_cert" {
 }
 
 resource "aws_secretsmanager_secret" "bootstrap_tls_private_key" {
-  name_prefix = "${var.project_name}-vault-bootstrap-tls-private-key-"
-  description = "Vault Bootstrap TLS Private Key"
+  name_prefix = var.bootstrap.secretsmanager_secret.tls_private_key_name_prefix
+  description = "Vault Enterprise Bootstrap TLS Private Key"
 }
 
 resource "aws_secretsmanager_secret_version" "bootstrap_tls_private_key" {
@@ -93,42 +93,24 @@ resource "aws_secretsmanager_secret_version" "bootstrap_tls_private_key" {
   secret_string = tls_private_key.bootstrap_tls_private_key.private_key_pem
 }
 
-# Root Token
-
-resource "aws_secretsmanager_secret" "vault_server_bootstrap_root_token" {
-  name_prefix = "${var.project_name}-vault-bootstrap-root-token-"
-  description = "Vault Bootstrap Root Token"
-}
-
 # Initialization Coordination SSM Parameters
 
-resource "aws_ssm_parameter" "vault_cluster_state" {
-  name        = "/${var.project_name}/vault/bootstrap/cluster/state"
+resource "aws_ssm_parameter" "bootstrap_cluster_state" {
+  name        = var.bootstrap.ssm_parameter.cluster_state_name
   type        = "String"
   value       = "Uninitialized"
-  description = "Bootstrap Initialization State Flag (Uninitialized | Ready)"
+  description = "Bootstrap Initialization State Flag"
 
   lifecycle {
     ignore_changes = [value]
   }
 }
 
-resource "aws_ssm_parameter" "vault_pki_state" {
-  name        = "/${var.project_name}/vault/bootstrap/pki/state"
+resource "aws_ssm_parameter" "bootstrap_pki_state" {
+  name        = var.bootstrap.ssm_parameter.pki_state_name
   type        = "String"
   value       = "Uninitialized"
-  description = "Bootstrap PKI State Flag (Uninitialized | Ready)"
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-
-resource "aws_ssm_parameter" "vault_pki_intermediate_ca_csr" {
-  name        = "/${var.project_name}/vault/bootstrap/pki/intermediate-csr"
-  type        = "String"
-  value       = "Uninitialized"
-  description = "Bootstrap PKI Intermediate CA CSR"
+  description = "Bootstrap PKI State Flag"
 
   lifecycle {
     ignore_changes = [value]

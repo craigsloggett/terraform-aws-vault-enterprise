@@ -1,28 +1,28 @@
 locals {
-  # (Optional) Existing VPC Configuration
-  vpc = var.existing_vpc != null ? {
-    id                 = var.existing_vpc.vpc_id
+  # VPC Configuration
+  vpc = var.vpc.existing != null ? {
+    id                 = var.vpc.existing.vpc_id
     cidr               = data.aws_vpc.existing[0].cidr_block
-    private_subnet_ids = var.existing_vpc.private_subnet_ids
-    public_subnet_ids  = var.existing_vpc.public_subnet_ids
+    private_subnet_ids = var.vpc.existing.private_subnet_ids
+    public_subnet_ids  = var.vpc.existing.public_subnet_ids
     } : {
     id                 = module.vpc[0].vpc_id
-    cidr               = var.vpc_cidr
+    cidr               = var.vpc.cidr
     private_subnet_ids = module.vpc[0].private_subnets
     public_subnet_ids  = module.vpc[0].public_subnets
   }
 
   # Derived as maximum nodes that can be out during instance refresh
   # while maintaining quorum.
-  #  floor( ( n-1 ) / n * 100 ) gives:
+  #  floor( ( n-1 ) * 100 / n ) gives:
   #   n=3 --> 66% (1 node out, 2 healthy)
   #   n=5 --> 80% (1 node out, 4 healthy)
   instance_refresh_min_healthy_pct = floor(
-    (var.vault_node_count - 1) / var.vault_node_count * 100
+    (var.vault_cluster.node_count - 1) * 100 / var.vault_cluster.node_count
   )
 
   # Environment Configuration
-  vault_fqdn = "${var.vault_subdomain}.${var.route53_zone.name}"
+  vault_fqdn = trimsuffix(aws_route53_record.vault_enterprise.fqdn, ".")
 
   # EBS Configuration
   ebs_raft_device_name  = "/dev/xvdf"
@@ -34,28 +34,33 @@ locals {
   config_vault_admin_policy     = file("${path.module}/files/policies/admin.hcl")
 
   config_vault_server_policy = templatefile("${path.module}/templates/policies/vault-server.hcl.tftpl", {
-    vault_pki_mount_path = var.vault_pki_mount_path
+    vault_pki_mount_path = var.vault_pki.mount_path
   })
 
   config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
-    cluster_name                      = var.project_name
-    vault_fqdn                        = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    ui                                = var.vault.ui
+    disable_mlock                     = var.vault.disable_mlock
+    cluster_name                      = var.vault.cluster_name
+    log_level                         = var.vault.log_level
+    log_format                        = var.vault.log_format
+    tls_min_version                   = var.vault.listener_tcp.tls_min_version
+    prometheus_retention_time         = var.vault.telemetry.prometheus_retention_time
+    disable_hostname                  = var.vault.telemetry.disable_hostname
+    vault_fqdn                        = local.vault_fqdn
     aws_region                        = data.aws_region.current.region
-    kms_key_alias                     = aws_kms_alias.vault.name
-    vault_cluster_auto_join_tag_key   = local.vault_cluster_auto_join_tag_key
-    vault_cluster_auto_join_tag_value = local.vault_cluster_auto_join_tag_value
+    kms_key_alias                     = aws_kms_alias.auto_unseal.name
+    vault_cluster_auto_join_tag_key   = var.vault_cluster.auto_join.tag_key
+    vault_cluster_auto_join_tag_value = var.vault_cluster.auto_join.tag_value
   })
 
   config_vault_snapshot_json = templatefile("${path.module}/templates/vault/snapshot.json.tftpl", {
-    aws_s3_bucket = aws_s3_bucket.vault_snapshots.id
+    aws_s3_bucket = aws_s3_bucket.snapshots.id
     aws_s3_region = data.aws_region.current.region
-    interval      = var.vault_snapshot_interval
-    retain        = var.vault_snapshot_retain
+    path_prefix   = var.vault_snapshot.path_prefix
+    file_prefix   = var.vault_snapshot.file_prefix
+    interval      = var.vault_snapshot.interval
+    retain        = var.vault_snapshot.retain
   })
-
-  # Cluster Coordination Configuration
-  vault_cluster_auto_join_tag_key   = var.vault_cluster_auto_join_tag.key
-  vault_cluster_auto_join_tag_value = var.vault_cluster_auto_join_tag.value
 
   # Vault Agent Configuration
   config_vault_agent_service                 = file("${path.module}/files/agent/vault-agent.service")
@@ -63,13 +68,12 @@ locals {
   config_vault_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
 
   config_vault_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
-    vault_fqdn = trimsuffix(aws_route53_record.vault.fqdn, ".")
+    vault_fqdn = local.vault_fqdn
   })
 
   config_vault_agent_server_tls_ctmpl = templatefile("${path.module}/templates/agent/vault-server-tls.ctmpl.tftpl", {
-    vault_fqdn                = trimsuffix(aws_route53_record.vault.fqdn, ".")
-    vault_pki_mount_path      = var.vault_pki_mount_path
-    vault_pki_server_cert_ttl = var.vault_pki_server_cert_ttl
+    vault_fqdn                = local.vault_fqdn
+    vault_pki_mount_path      = var.vault_pki.mount_path
+    vault_pki_server_cert_ttl = var.vault_pki.server_cert_ttl
   })
-
 }

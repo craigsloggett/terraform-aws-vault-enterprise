@@ -2,167 +2,22 @@
 
 Terraform module which deploys a Vault Enterprise cluster on AWS with Raft integrated storage and Vault PKI-managed TLS.
 
-## Architecture
-
-- 3 (or 5) Vault nodes across separate availability zones, each with dedicated EBS volumes for Raft storage and audit logs
-- AWS KMS auto-unseal
-- Raft auto-join via EC2 tag discovery
-- Automated cluster initialization with root token and recovery keys stored in Secrets Manager
-- PKI intermediate CA with externally signed CSR
-- Vault generates the CSR, an external CA signs it, and the signed certificate is imported automatically
-- Vault Agent for automated TLS certificate rotation using PKI-signed certificates
-- NLB with TCP passthrough (TLS terminates on the Vault nodes), internal by default
-- Route 53 DNS alias to the NLB
-- Bootstrap TLS certificates and Vault Enterprise license stored in AWS Secrets Manager
-- SSM Parameter Store for cluster and PKI state coordination
-- Bastion host for SSH access to the private Vault nodes
-- VPC endpoints for EC2, KMS, Secrets Manager, and S3
-- AWS IAM auth method for Vault Agent authentication
-- Optional HCP Terraform JWT auth method for Terraform-managed Vault administration
-
-## Prerequisites
-
-- A Route 53 hosted zone
-- A Vault Enterprise license
-- An EC2 key pair
-- An Ubuntu or Debian-based AMI
-- An external CA capable of signing the Vault PKI intermediate CSR (see [PKI intermediate CA](#pki-intermediate-ca))
-
-## Post-deployment
-
-After `terraform apply`, the cluster bootstraps automatically:
-
-1. The bootstrap node initializes the cluster (`vault operator init`), stores the root token and recovery keys in Secrets Manager, and marks the cluster as ready in SSM.
-2. Remaining nodes auto-join via Raft and auto-unseal via KMS.
-3. The bootstrap node enables the Vault PKI secrets engine, generates an intermediate CA CSR, and publishes it to SSM. It then waits for an external process to sign the CSR and store the signed certificate in Secrets Manager.
-4. Once the signed certificate is available, all nodes issue PKI-signed server certificates and Vault Agent begins automated TLS rotation.
-
-Retrieve the root token after deployment (the secret name is prefixed with
-`<project-name>-vault-bootstrap-root-token-`):
-
-```bash
-aws secretsmanager list-secrets \
-  --filter Key=name,Values=<project-name>-vault-bootstrap-root-token \
-  --query "SecretList[0].ARN" --output text \
-| xargs -I{} aws secretsmanager get-secret-value \
-  --secret-id {} --query SecretString --output text
-```
-
-## PKI intermediate CA
-
-This module uses a signed CSR pattern for the Vault PKI intermediate CA. During bootstrap, Vault generates a CSR internally (the private key never leaves Vault) and publishes it to SSM. An external process must sign the CSR and store the result in Secrets Manager before the cluster can complete its PKI setup.
-
-The workflow:
-
-1. Vault publishes the intermediate CA CSR to the SSM parameter named in the `vault_pki_intermediate_ca_csr_ssm_parameter_name` output.
-2. An external process reads the CSR, signs it with a root or intermediate CA, and writes the signed certificate to the Secrets Manager secret identified by the `vault_pki_intermediate_ca_signed_csr_secret_arn` output. The secret value must be a JSON object:
-
-   ```json
-   {
-     "certificate": "<signed-intermediate-cert-pem>",
-     "ca_chain": "<root-and-intermediate-ca-chain-pem>"
-   }
-   ```
-
-3. Vault imports the signed certificate, publishes the CA bundle to SSM, issues PKI-signed server certificates, and starts Vault Agent for ongoing TLS rotation.
-
-The bootstrap node waits up to `vault_pki_signed_intermediate_wait_timeout_seconds` (default 1800) for the signed certificate to appear.
-
-See [`examples/basic/`](examples/basic/) for a reference implementation that uses a Terraform-managed root CA to sign the CSR automatically.
-
-## Cluster access
-
-After the PKI bootstrap completes, the TLS CA bundle is published to SSM. Retrieve it using the parameter name from the `vault_tls_ca_bundle_ssm_parameter_name` output:
-
-```bash
-aws ssm get-parameter \
-  --name "$(terraform output -raw vault_tls_ca_bundle_ssm_parameter_name)" \
-  --query "Parameter.Value" --output text > vault-ca.crt
-
-export VAULT_ADDR="$(terraform output -raw vault_url)"
-export VAULT_CACERT=vault-ca.crt
-vault status
-```
-
-## Network access
-
-By default, the NLB is internal and the Vault API is only reachable from within
-the VPC. Access the cluster through the bastion host or a VPN connection.
-
-To expose the Vault UI and API over the public internet, set `nlb_internal` to
-`false` and provide the CIDR blocks that should be allowed to reach port 8200:
-
-```hcl
-module "vault" {
-  # ...
-
-  nlb_internal            = false
-  vault_api_allowed_cidrs = ["0.0.0.0/0"]
-}
-```
-
-This places the NLB in the public subnets and adds security group rules for the
-specified CIDRs. The Vault nodes remain in private subnets, only the NLB is
-internet-facing. Restrict `vault_api_allowed_cidrs` to known ranges where
-possible.
-
-## Security Considerations
-
-The Terraform `tls` provider stores bootstrap private key material (CA and
-server keys) in state as plaintext. These bootstrap certificates are short-lived
-(minutes) and are replaced by Vault PKI-signed certificates during the bootstrap
-process. Ensure your state backend is encrypted (e.g., S3 with SSE).
-
-All nodes share a single bootstrap server certificate. This works because the
-certificate's `dns_names` includes the cluster FQDN, which Raft uses for
-`leader_tls_servername` during auto-join. After PKI bootstrap, each node
-receives its own PKI-signed certificate rotated automatically by Vault Agent.
-
 <!-- BEGIN_TF_DOCS -->
 ## Usage
 
 ### main.tf
 ```hcl
-data "aws_vpc" "selected" {
-  filter {
-    name   = "tag:Name"
-    values = [var.vpc_name]
-  }
-}
-
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.selected.id]
-  }
-  filter {
-    name   = "tag:Name"
-    values = ["${var.vpc_name}-private-*"]
-  }
-}
-
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.selected.id]
-  }
-  filter {
-    name   = "tag:Name"
-    values = ["${var.vpc_name}-public-*"]
-  }
-}
-
-data "aws_route53_zone" "vault" {
+data "aws_route53_zone" "selected" {
   name = var.route53_zone_name
 }
 
 data "aws_ami" "selected" {
   most_recent = true
-  owners      = [var.ec2_ami_owner]
+  owners      = [var.ami_owner]
 
   filter {
     name   = "name"
-    values = [var.ec2_ami_name]
+    values = [var.ami_name]
   }
 }
 
@@ -170,31 +25,9 @@ module "vault" {
   # tflint-ignore: terraform_module_pinned_source
   source = "git::https://github.com/craigsloggett/terraform-aws-vault-enterprise"
 
-  project_name             = var.project_name
-  route53_zone             = data.aws_route53_zone.vault
   vault_enterprise_license = var.vault_enterprise_license
-  ec2_key_pair_name        = var.ec2_key_pair_name
-  ec2_ami                  = data.aws_ami.selected
-
-  existing_vpc = {
-    vpc_id             = data.aws_vpc.selected.id
-    private_subnet_ids = data.aws_subnets.private.ids
-    public_subnet_ids  = data.aws_subnets.public.ids
-  }
-
-  vault_pki_intermediate_ca = {
-    key_type = local.pki_key_type
-    key_bits = local.pki_key_bits
-  }
-
-  nlb_internal               = true
-  vault_api_allowed_cidrs    = ["0.0.0.0/0"]
-  vault_server_instance_type = "t3.medium"
-
-  hcp_terraform_jwt_auth = {
-    hostname          = "app.terraform.io"
-    organization_name = var.hcp_terraform_organization_name
-  }
+  route53_zone             = data.aws_route53_zone.selected
+  ami                      = data.aws_ami.selected
 }
 ```
 
@@ -217,93 +50,76 @@ module "vault" {
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_bastion_allowed_cidrs"></a> [bastion\_allowed\_cidrs](#input\_bastion\_allowed\_cidrs) | CIDR blocks allowed to SSH to the bastion host. Defaults to 0.0.0.0/0 for convenience; restrict to known ranges in any production deployment. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
-| <a name="input_bastion_instance_type"></a> [bastion\_instance\_type](#input\_bastion\_instance\_type) | EC2 instance type for the bastion host. | `string` | `"t3.micro"` | no |
-| <a name="input_ec2_ami"></a> [ec2\_ami](#input\_ec2\_ami) | AMI to use for EC2 instances. Must be Ubuntu or Debian-based. | <pre>object({<br/>    id   = string<br/>    name = string<br/>  })</pre> | n/a | yes |
-| <a name="input_ec2_key_pair_name"></a> [ec2\_key\_pair\_name](#input\_ec2\_key\_pair\_name) | Name of an existing EC2 key pair for SSH access. | `string` | n/a | yes |
-| <a name="input_existing_vpc"></a> [existing\_vpc](#input\_existing\_vpc) | Existing VPC to deploy into. When null (default), a new VPC is created.<br/>The existing VPC must already have the required VPC endpoints:<br/>Secrets Manager, KMS, and EC2 (Interface), S3 (Gateway). | <pre>object({<br/>    vpc_id             = string<br/>    private_subnet_ids = list(string)<br/>    public_subnet_ids  = list(string)<br/>  })</pre> | `null` | no |
-| <a name="input_hcp_terraform_jwt_auth"></a> [hcp\_terraform\_jwt\_auth](#input\_hcp\_terraform\_jwt\_auth) | Configuration for the HCP Terraform JWT auth method that provides<br/>dynamic, short-lived Vault credentials to HCP Terraform workspaces.<br/>When `organization_name` and `workspace_id` are set, a JWT auth method<br/>is mounted at `mount_path` in the root namespace and configured to<br/>verify tokens against `hostname` via OIDC discovery. A role named<br/>`role_name` is created against that mount with `bound_claims`<br/>restricting authentication to the declared organization and workspace. | <pre>object({<br/>    hostname              = optional(string, "app.terraform.io")<br/>    organization_name     = optional(string, "")<br/>    workspace_id          = optional(string, "")<br/>    oidc_discovery_ca_pem = optional(string, "")<br/>    mount_path            = optional(string, "app-terraform-io")<br/>    role_name             = optional(string, "terraform-admin")<br/>  })</pre> | `{}` | no |
-| <a name="input_iam_instance_profile"></a> [iam\_instance\_profile](#input\_iam\_instance\_profile) | IAM instance profile configuration for the Vault Enterprise EC2 instances.<br/>The module creates one instance profile and associates it with the IAM role<br/>created by this module. Defaults reflect the module's recommended PascalCase<br/>naming; consumer-supplied values are passed through verbatim with no<br/>transformation. | <pre>object({<br/>    name = optional(string, "VaultEnterpriseServerInstanceProfile")<br/>    path = optional(string, "/")<br/>  })</pre> | `{}` | no |
-| <a name="input_iam_role"></a> [iam\_role](#input\_iam\_role) | IAM role configuration for the Vault Enterprise EC2 instances. The module<br/>creates one role with several inline policies attached. Defaults reflect the<br/>module's recommended PascalCase naming; consumer-supplied values are passed<br/>through verbatim with no transformation. | <pre>object({<br/>    name = optional(string, "VaultEnterpriseServerRole")<br/>    path = optional(string, "/")<br/>    inline_policy_names = optional(object({<br/>      kms_read_write             = optional(string, "KMSReadWriteAccess")<br/>      kms_describe               = optional(string, "KMSDescribeAccess")<br/>      secrets_manager_read       = optional(string, "SecretsManagerReadAccess")<br/>      secrets_manager_describe   = optional(string, "SecretsManagerDescribeAccess")<br/>      secrets_manager_read_write = optional(string, "SecretsManagerReadWriteAccess")<br/>      s3_object_read_write       = optional(string, "S3ObjectReadWriteAccess")<br/>      s3_bucket_list             = optional(string, "S3BucketListAccess")<br/>      ec2_describe               = optional(string, "EC2DescribeAccess")<br/>      ssm_read_write             = optional(string, "SSMReadWriteAccess")<br/>      iam_read                   = optional(string, "IAMReadAccess")<br/>    }), {})<br/>  })</pre> | `{}` | no |
-| <a name="input_nlb_internal"></a> [nlb\_internal](#input\_nlb\_internal) | Whether the NLB is internal. | `bool` | `true` | no |
-| <a name="input_project_name"></a> [project\_name](#input\_project\_name) | Name prefix for all resources. | `string` | n/a | yes |
-| <a name="input_root_volume_size"></a> [root\_volume\_size](#input\_root\_volume\_size) | Size in GiB of the root EBS volume for Vault nodes. | `number` | `50` | no |
-| <a name="input_route53_zone"></a> [route53\_zone](#input\_route53\_zone) | Route 53 hosted zone for the Vault DNS record. | <pre>object({<br/>    zone_id = string<br/>    name    = string<br/>  })</pre> | n/a | yes |
-| <a name="input_vault_api_allowed_cidrs"></a> [vault\_api\_allowed\_cidrs](#input\_vault\_api\_allowed\_cidrs) | CIDR blocks allowed to reach the Vault API (port 8200) from outside the VPC. Only effective when nlb\_internal is false. | `list(string)` | `[]` | no |
-| <a name="input_vault_audit_disk"></a> [vault\_audit\_disk](#input\_vault\_audit\_disk) | EBS configuration for the Vault Audit Log storage volume (/dev/xvdg). | <pre>object({<br/>    volume_type = optional(string, "gp3")<br/>    volume_size = optional(number, 50)<br/>  })</pre> | <pre>{<br/>  "volume_size": 50,<br/>  "volume_type": "gp3"<br/>}</pre> | no |
-| <a name="input_vault_aws_auth_role_max_ttl"></a> [vault\_aws\_auth\_role\_max\_ttl](#input\_vault\_aws\_auth\_role\_max\_ttl) | Max TTL for the vault-server AWS auth role. | `string` | `"24h"` | no |
-| <a name="input_vault_aws_auth_role_ttl"></a> [vault\_aws\_auth\_role\_ttl](#input\_vault\_aws\_auth\_role\_ttl) | Default TTL for the vault-server AWS auth role. | `string` | `"4h"` | no |
-| <a name="input_vault_aws_resource_names"></a> [vault\_aws\_resource\_names](#input\_vault\_aws\_resource\_names) | Values for the `Name` tag applied to AWS resources created by this module.<br/>Each field is optional; consumers may override individual entries to avoid<br/>collisions when deploying multiple instances of the module into the same<br/>AWS account. | <pre>object({<br/>    bastion_instance_name             = optional(string, "vault-enterprise-bastion-host")<br/>    vault_server_instance_name        = optional(string, "vault-enterprise-server")<br/>    vault_server_volume_name          = optional(string, "vault-enterprise-server-volume")<br/>    vault_kms_key_name                = optional(string, "vault-enterprise-auto-unseal-key")<br/>    vpc_name                          = optional(string, "vault-enterprise-vpc")<br/>    secretsmanager_vpc_endpoint_name  = optional(string, "vault-enterprise-secretsmanager-vpc-endpoint")<br/>    kms_vpc_endpoint_name             = optional(string, "vault-enterprise-kms-vpc-endpoint")<br/>    ec2_vpc_endpoint_name             = optional(string, "vault-enterprise-ec2-vpc-endpoint")<br/>    s3_vpc_endpoint_name              = optional(string, "vault-enterprise-s3-vpc-endpoint")<br/>    bastion_security_group_name       = optional(string, "vault-enterprise-bastion-security-group")<br/>    vault_servers_security_group_name = optional(string, "vault-enterprise-servers-security-group")<br/>    vpc_endpoints_security_group_name = optional(string, "vault-enterprise-vpc-endpoints-security-group")<br/>  })</pre> | `{}` | no |
-| <a name="input_vault_cluster_auto_join_tag"></a> [vault\_cluster\_auto\_join\_tag](#input\_vault\_cluster\_auto\_join\_tag) | The Vault cluster EC2 tag\_key and tag\_value configuration used for AWS Cloud auto-join. | <pre>object({<br/>    key   = optional(string, "vault:raft:retryjoin:autojoin")<br/>    value = string<br/>  })</pre> | n/a | yes |
-| <a name="input_vault_data_disk"></a> [vault\_data\_disk](#input\_vault\_data\_disk) | EBS configuration for the Vault Raft Data storage volume (/dev/xvdf). | <pre>object({<br/>    volume_type = optional(string, "gp3")<br/>    volume_size = optional(number, 50)<br/>    iops        = optional(number, 3000)<br/>    throughput  = optional(number, 125)<br/>  })</pre> | <pre>{<br/>  "iops": 3000,<br/>  "throughput": 125,<br/>  "volume_size": 50,<br/>  "volume_type": "gp3"<br/>}</pre> | no |
+| <a name="input_ami"></a> [ami](#input\_ami) | AMI for EC2 instances. Must be Ubuntu or Debian-based. Accepts the result of an `aws_ami` data source directly. | <pre>object({<br/>    id   = string<br/>    name = string<br/>  })</pre> | n/a | yes |
+| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion host configuration. `allowed_cidrs` defaults to `["0.0.0.0/0"]` for<br/>convenience; restrict to known ranges in any production deployment. | <pre>object({<br/>    name          = optional(string, "vault-enterprise-bastion-host")<br/>    instance_type = optional(string, "t3.micro")<br/>    allowed_cidrs = optional(list(string), ["0.0.0.0/0"])<br/><br/>    security_group = optional(object({<br/>      name_prefix = optional(string, "vault-enterprise-bastion-host-")<br/>      name        = optional(string, "vault-enterprise-bastion-host")<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_bootstrap"></a> [bootstrap](#input\_bootstrap) | AWS resources used only during the Vault bootstrap ceremony. Secrets Manager<br/>secrets hold ephemeral bootstrap TLS material that Vault-issued certificates<br/>replace post-bootstrap; SSM parameters hold non-sensitive coordination state<br/>and the intermediate CA CSR exchanged out-of-band. | <pre>object({<br/>    secretsmanager_secret = optional(object({<br/>      tls_ca_name_prefix          = optional(string, "vault-enterprise-bootstrap-tls-ca-")<br/>      tls_cert_name_prefix        = optional(string, "vault-enterprise-bootstrap-tls-cert-")<br/>      tls_private_key_name_prefix = optional(string, "vault-enterprise-bootstrap-tls-private-key-")<br/>    }), {})<br/><br/>    ssm_parameter = optional(object({<br/>      cluster_state_name = optional(string, "/vault-enterprise/bootstrap/cluster/state")<br/>      pki_state_name     = optional(string, "/vault-enterprise/bootstrap/pki/state")<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_hcp_terraform_jwt_auth"></a> [hcp\_terraform\_jwt\_auth](#input\_hcp\_terraform\_jwt\_auth) | Configuration for the HCP Terraform JWT auth method that provides<br/>dynamic, short-lived Vault credentials to HCP Terraform workspaces.<br/>When `organization_name` and `workspace_id` are set, a JWT auth method<br/>is mounted at `mount_path` in the root namespace and configured to<br/>verify tokens against `hostname` via OIDC discovery. A role named<br/>`role_name` is created against that mount with `bound_claims`<br/>restricting authentication to the declared organization and workspace. | <pre>object({<br/>    hostname              = optional(string, "app.terraform.io")<br/>    organization_name     = optional(string, "")<br/>    workspace_id          = optional(string, "")<br/>    oidc_discovery_ca_pem = optional(string, "")<br/>    mount_path            = optional(string, "app-terraform-io")<br/>    role_name             = optional(string, "hcp-terraform")<br/>  })</pre> | `{}` | no |
+| <a name="input_iam_instance_profile"></a> [iam\_instance\_profile](#input\_iam\_instance\_profile) | IAM instance profile configuration for the Vault Enterprise EC2 instances.<br/>The module creates one instance profile and associates it with the IAM role<br/>created by this module. | <pre>object({<br/>    name = optional(string, "VaultEnterpriseServerInstanceProfile")<br/>    path = optional(string, "/")<br/>  })</pre> | `{}` | no |
+| <a name="input_iam_role"></a> [iam\_role](#input\_iam\_role) | IAM role configuration for the Vault Enterprise EC2 instances. The module<br/>creates one role with several inline policies attached. | <pre>object({<br/>    name = optional(string, "VaultEnterpriseServerRole")<br/>    path = optional(string, "/")<br/><br/>    inline_policy_names = optional(object({<br/>      kms_read_write             = optional(string, "KMSReadWriteAccess")<br/>      kms_describe               = optional(string, "KMSDescribeAccess")<br/>      secrets_manager_read       = optional(string, "SecretsManagerReadAccess")<br/>      secrets_manager_describe   = optional(string, "SecretsManagerDescribeAccess")<br/>      secrets_manager_read_write = optional(string, "SecretsManagerReadWriteAccess")<br/>      s3_object_read_write       = optional(string, "S3ObjectReadWriteAccess")<br/>      s3_bucket_list             = optional(string, "S3BucketListAccess")<br/>      ec2_describe               = optional(string, "EC2DescribeAccess")<br/>      ssm_read_write             = optional(string, "SSMReadWriteAccess")<br/>      iam_read                   = optional(string, "IAMReadAccess")<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_key_pair"></a> [key\_pair](#input\_key\_pair) | EC2 key pair for SSH access. Accepts the result of an `aws_key_pair` data source directly. | <pre>object({<br/>    key_name = string<br/>  })</pre> | `null` | no |
+| <a name="input_kms_key"></a> [kms\_key](#input\_kms\_key) | Configuration for the KMS key used for Vault auto-unseal. | <pre>object({<br/>    name                    = optional(string, "vault-enterprise-auto-unseal-key")<br/>    alias                   = optional(string, "vault-enterprise-auto-unseal-key")<br/>    deletion_window_in_days = optional(number, 7)<br/>    enable_key_rotation     = optional(bool, true)<br/>  })</pre> | `{}` | no |
+| <a name="input_nlb"></a> [nlb](#input\_nlb) | NLB configuration for the Vault API. `api_allowed_cidrs` is only effective<br/>when `internal` is `false`. | <pre>object({<br/>    name_prefix       = optional(string, "vault-")<br/>    internal          = optional(bool, true)<br/>    api_allowed_cidrs = optional(list(string), [])<br/><br/>    lb_target_group = optional(object({<br/>      name_prefix = optional(string, "vault-")<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_route53_record"></a> [route53\_record](#input\_route53\_record) | Route53 A record configuration. The record is created in the hosted zone<br/>supplied via `route53_zone` and points (via alias) at the NLB created by<br/>this module. | <pre>object({<br/>    subdomain = optional(string, "vault")<br/>  })</pre> | `{}` | no |
+| <a name="input_route53_zone"></a> [route53\_zone](#input\_route53\_zone) | Route 53 hosted zone for the Vault DNS record. Accepts the result of an `aws_route53_zone` data source directly. | <pre>object({<br/>    zone_id = string<br/>    name    = string<br/>  })</pre> | n/a | yes |
+| <a name="input_vault"></a> [vault](#input\_vault) | Vault Enterprise product configuration. | <pre>object({<br/>    version       = optional(string, "1.21.4+ent")<br/>    ui            = optional(bool, true)<br/>    disable_mlock = optional(bool, true)<br/>    cluster_name  = optional(string, "vault-enterprise")<br/><br/>    log_level  = optional(string, "info")<br/>    log_format = optional(string, "json")<br/><br/>    listener_tcp = optional(object({<br/>      tls_min_version = optional(string, "tls13")<br/>    }), {})<br/><br/>    telemetry = optional(object({<br/>      prometheus_retention_time = optional(string, "24h")<br/>      disable_hostname          = optional(bool, true)<br/>    }), {})<br/><br/>    secretsmanager_secret = optional(object({<br/>      license_name_prefix       = optional(string, "vault-enterprise-license-")<br/>      recovery_keys_name_prefix = optional(string, "vault-enterprise-recovery-keys-")<br/>      root_token_name_prefix    = optional(string, "vault-enterprise-root-token-")<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_vault_auth"></a> [vault\_auth](#input\_vault\_auth) | TTL configuration for Vault auth method roles. | <pre>object({<br/>    aws = optional(object({<br/>      role_ttl     = optional(string, "4h")<br/>      role_max_ttl = optional(string, "24h")<br/>    }), {})<br/><br/>    jwt = optional(object({<br/>      role_ttl     = optional(string, "1h")<br/>      role_max_ttl = optional(string, "2h")<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_vault_autopilot"></a> [vault\_autopilot](#input\_vault\_autopilot) | Vault Enterprise autopilot configuration. | <pre>object({<br/>    cleanup_dead_servers               = optional(bool, true)<br/>    dead_server_last_contact_threshold = optional(string, "24h")<br/>  })</pre> | `{}` | no |
+| <a name="input_vault_cluster"></a> [vault\_cluster](#input\_vault\_cluster) | Configuration for the Vault Enterprise server EC2 instances and their EBS volumes. | <pre>object({<br/>    instance_type    = optional(string, "m5.large")<br/>    node_count       = optional(number, 5)<br/>    root_volume_size = optional(number, 50)<br/><br/>    raft_data_disk = optional(object({<br/>      volume_type = optional(string, "gp3")<br/>      volume_size = optional(number, 50)<br/>      iops        = optional(number, 3000)<br/>      throughput  = optional(number, 125)<br/>    }), {})<br/><br/>    audit_disk = optional(object({<br/>      volume_type = optional(string, "gp3")<br/>      volume_size = optional(number, 50)<br/>    }), {})<br/><br/>    auto_join = optional(object({<br/>      tag_key   = optional(string, "vault:raft:retryjoin:autojoin")<br/>      tag_value = optional(string, "vault-enterprise")<br/>    }), {})<br/><br/>    security_group = optional(object({<br/>      name_prefix = optional(string, "vault-enterprise-servers-")<br/>      name        = optional(string, "vault-enterprise-servers")<br/>    }), {})<br/><br/>    launch_template = optional(object({<br/>      name_prefix = optional(string, "vault-enterprise-servers-")<br/>      volume_name = optional(string, "vault-enterprise-volume")<br/>    }), {})<br/><br/>    autoscaling_group = optional(object({<br/>      name_prefix   = optional(string, "vault-enterprise-servers-")<br/>      instance_name = optional(string, "vault-enterprise-server")<br/>    }), {})<br/>  })</pre> | `{}` | no |
 | <a name="input_vault_enterprise_license"></a> [vault\_enterprise\_license](#input\_vault\_enterprise\_license) | Vault Enterprise license string. | `string` | n/a | yes |
-| <a name="input_vault_jwt_auth_role_max_ttl"></a> [vault\_jwt\_auth\_role\_max\_ttl](#input\_vault\_jwt\_auth\_role\_max\_ttl) | Max TTL for the HCP Terraform JWT auth role. | `string` | `"2h"` | no |
-| <a name="input_vault_jwt_auth_role_ttl"></a> [vault\_jwt\_auth\_role\_ttl](#input\_vault\_jwt\_auth\_role\_ttl) | Default TTL for the HCP Terraform JWT auth role. | `string` | `"1h"` | no |
-| <a name="input_vault_node_count"></a> [vault\_node\_count](#input\_vault\_node\_count) | Number of Vault nodes in the cluster. Must be 3 or 5 for Raft quorum. | `number` | `3` | no |
-| <a name="input_vault_pki_intermediate_ca"></a> [vault\_pki\_intermediate\_ca](#input\_vault\_pki\_intermediate\_ca) | Configuration for the Vault PKI intermediate CA certificate. | <pre>object({<br/>    common_name  = optional(string, "Vault Intermediate CA")<br/>    country      = optional(string, "")<br/>    organization = optional(string, "")<br/>    key_type     = optional(string, "rsa")<br/>    key_bits     = optional(number, 2048)<br/>  })</pre> | `{}` | no |
-| <a name="input_vault_pki_mount_path"></a> [vault\_pki\_mount\_path](#input\_vault\_pki\_mount\_path) | Mount path for the Vault PKI secrets engine used to issue Vault server TLS certificates. | `string` | `"pki_vault"` | no |
-| <a name="input_vault_pki_server_cert_ttl"></a> [vault\_pki\_server\_cert\_ttl](#input\_vault\_pki\_server\_cert\_ttl) | TTL requested when the bootstrap script issues the Vault server certificate. | `string` | `"24h"` | no |
-| <a name="input_vault_pki_signed_intermediate_wait_timeout_seconds"></a> [vault\_pki\_signed\_intermediate\_wait\_timeout\_seconds](#input\_vault\_pki\_signed\_intermediate\_wait\_timeout\_seconds) | Maximum seconds the bootstrap node waits for the signed intermediate certificate to appear in Secrets Manager. | `number` | `1800` | no |
-| <a name="input_vault_pki_vault_mount_max_ttl"></a> [vault\_pki\_vault\_mount\_max\_ttl](#input\_vault\_pki\_vault\_mount\_max\_ttl) | Max lease TTL for the Vault PKI secrets engine mount. | `string` | `"26280h"` | no |
-| <a name="input_vault_pki_vault_server_role_max_ttl"></a> [vault\_pki\_vault\_server\_role\_max\_ttl](#input\_vault\_pki\_vault\_server\_role\_max\_ttl) | Max TTL for certificates issued by the vault-server PKI role. | `string` | `"24h"` | no |
-| <a name="input_vault_server_instance_type"></a> [vault\_server\_instance\_type](#input\_vault\_server\_instance\_type) | EC2 instance type for Vault server nodes. | `string` | `"m5.large"` | no |
-| <a name="input_vault_snapshot_interval"></a> [vault\_snapshot\_interval](#input\_vault\_snapshot\_interval) | Seconds between automated Raft snapshots. | `number` | `3600` | no |
-| <a name="input_vault_snapshot_retain"></a> [vault\_snapshot\_retain](#input\_vault\_snapshot\_retain) | Number of automated Raft snapshots to retain in S3. | `number` | `72` | no |
-| <a name="input_vault_subdomain"></a> [vault\_subdomain](#input\_vault\_subdomain) | Subdomain for the Vault DNS record. | `string` | `"vault"` | no |
-| <a name="input_vault_version"></a> [vault\_version](#input\_vault\_version) | Vault Enterprise release version (e.g., 1.21.4+ent). | `string` | `"1.21.4+ent"` | no |
-| <a name="input_vpc_cidr"></a> [vpc\_cidr](#input\_vpc\_cidr) | CIDR block for the VPC. | `string` | `"10.0.0.0/16"` | no |
-| <a name="input_vpc_private_subnets"></a> [vpc\_private\_subnets](#input\_vpc\_private\_subnets) | Private subnet CIDR blocks. | `list(string)` | <pre>[<br/>  "10.0.1.0/24",<br/>  "10.0.2.0/24",<br/>  "10.0.3.0/24"<br/>]</pre> | no |
-| <a name="input_vpc_public_subnets"></a> [vpc\_public\_subnets](#input\_vpc\_public\_subnets) | Public subnet CIDR blocks. | `list(string)` | <pre>[<br/>  "10.0.101.0/24",<br/>  "10.0.102.0/24",<br/>  "10.0.103.0/24"<br/>]</pre> | no |
+| <a name="input_vault_pki"></a> [vault\_pki](#input\_vault\_pki) | Vault PKI secrets engine configuration. | <pre>object({<br/>    mount_path                               = optional(string, "pki_vault")<br/>    mount_max_ttl                            = optional(string, "26280h")<br/>    server_role_max_ttl                      = optional(string, "24h")<br/>    server_cert_ttl                          = optional(string, "24h")<br/>    signed_intermediate_wait_timeout_seconds = optional(number, 1800)<br/><br/>    secretsmanager_secret = optional(object({<br/>      signed_intermediate_ca_name_prefix = optional(string, "vault-enterprise-signed-intermediate-ca-")<br/>    }), {})<br/><br/>    ssm_parameter = optional(object({<br/>      intermediate_ca_name     = optional(string, "/vault-enterprise/pki/intermediate-ca")<br/>      intermediate_ca_csr_name = optional(string, "/vault-enterprise/pki/intermediate-ca-csr")<br/>    }), {})<br/><br/>    intermediate_ca = optional(object({<br/>      common_name  = optional(string, "Vault Intermediate CA")<br/>      country      = optional(string, "")<br/>      organization = optional(string, "")<br/>      key_type     = optional(string, "rsa")<br/>      key_bits     = optional(number, 2048)<br/>    }), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_vault_snapshot"></a> [vault\_snapshot](#input\_vault\_snapshot) | Vault Enterprise snapshot configuration. | <pre>object({<br/>    aws_s3_bucket = optional(object({<br/>      name_prefix   = optional(string, "vault-enterprise-snapshots-")<br/>      force_destroy = optional(bool, false)<br/>    }), {})<br/>    path_prefix = optional(string, "snapshots/")<br/>    file_prefix = optional(string, "vault-snapshot")<br/>    interval    = optional(number, 3600)<br/>    retain      = optional(number, 72)<br/>  })</pre> | `{}` | no |
+| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC configuration. When `existing` is null (default), a new VPC is created<br/>using `cidr`, `private_subnets`, and `public_subnets`. When `existing` is<br/>set, those creation fields are ignored and the supplied VPC is used. The<br/>supplied VPC must have the required VPC endpoints configured. | <pre>object({<br/>    name            = optional(string, "vault-enterprise-vpc")<br/>    cidr            = optional(string, "10.0.0.0/16")<br/>    private_subnets = optional(list(string), ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"])<br/>    public_subnets  = optional(list(string), ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"])<br/><br/>    existing = optional(object({<br/>      vpc_id             = string<br/>      private_subnet_ids = list(string)<br/>      public_subnet_ids  = list(string)<br/>    }), null)<br/>  })</pre> | `{}` | no |
+| <a name="input_vpc_endpoints"></a> [vpc\_endpoints](#input\_vpc\_endpoints) | Configuration for the VPC endpoints created by this module. Only created<br/>when `vpc.existing` is null. | <pre>object({<br/>    secretsmanager_name = optional(string, "vault-enterprise-secretsmanager-vpc-endpoint")<br/>    kms_name            = optional(string, "vault-enterprise-kms-vpc-endpoint")<br/>    ec2_name            = optional(string, "vault-enterprise-ec2-vpc-endpoint")<br/>    s3_name             = optional(string, "vault-enterprise-s3-vpc-endpoint")<br/><br/>    security_group = optional(object({<br/>      name_prefix = optional(string, "vault-enterprise-vpc-endpoints-")<br/>      name        = optional(string, "vault-enterprise-vpc-endpoints")<br/>    }), {})<br/>  })</pre> | `{}` | no |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [aws_autoscaling_group.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_group) | resource |
-| [aws_iam_instance_profile.vault_server](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile) | resource |
-| [aws_iam_role.vault_server](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
-| [aws_iam_role_policy.vault_server_ec2_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_iam_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_kms_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_kms_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_s3_bucket_list](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_s3_object_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_secrets_manager_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_secrets_manager_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_secrets_manager_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_iam_role_policy.vault_server_ssm_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_autoscaling_group.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_group) | resource |
+| [aws_iam_instance_profile.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_instance_profile) | resource |
+| [aws_iam_role.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
+| [aws_iam_role_policy.ec2_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.iam_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.kms_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.kms_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.s3_bucket_list](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.s3_object_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.secrets_manager_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.secrets_manager_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.secrets_manager_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.ssm_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_instance.bastion](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance) | resource |
-| [aws_kms_alias.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_alias) | resource |
-| [aws_kms_key.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key) | resource |
-| [aws_launch_template.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/launch_template) | resource |
-| [aws_lb.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb) | resource |
-| [aws_lb_listener.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener) | resource |
-| [aws_lb_target_group.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
-| [aws_route53_record.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
-| [aws_s3_bucket.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
-| [aws_s3_bucket_lifecycle_configuration.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
-| [aws_s3_bucket_policy.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
-| [aws_s3_bucket_public_access_block.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
-| [aws_s3_bucket_server_side_encryption_configuration.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
-| [aws_s3_bucket_versioning.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
+| [aws_kms_alias.auto_unseal](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_alias) | resource |
+| [aws_kms_key.auto_unseal](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key) | resource |
+| [aws_launch_template.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/launch_template) | resource |
+| [aws_lb.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb) | resource |
+| [aws_lb_listener.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener) | resource |
+| [aws_lb_target_group.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
+| [aws_route53_record.vault_enterprise](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
+| [aws_s3_bucket.snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket_lifecycle_configuration.snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
+| [aws_s3_bucket_policy.snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_s3_bucket_public_access_block.snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
+| [aws_s3_bucket_server_side_encryption_configuration.snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
+| [aws_s3_bucket_versioning.snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
 | [aws_secretsmanager_secret.bootstrap_tls_ca](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
 | [aws_secretsmanager_secret.bootstrap_tls_cert](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
 | [aws_secretsmanager_secret.bootstrap_tls_private_key](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
-| [aws_secretsmanager_secret.vault_enterprise_license](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
-| [aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
-| [aws_secretsmanager_secret.vault_recovery_keys](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
-| [aws_secretsmanager_secret.vault_server_bootstrap_root_token](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
+| [aws_secretsmanager_secret.license](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
+| [aws_secretsmanager_secret.recovery_keys](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
+| [aws_secretsmanager_secret.root_token](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
+| [aws_secretsmanager_secret.vault_pki_signed_intermediate_ca](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
 | [aws_secretsmanager_secret_version.bootstrap_tls_ca](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version) | resource |
 | [aws_secretsmanager_secret_version.bootstrap_tls_cert](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version) | resource |
 | [aws_secretsmanager_secret_version.bootstrap_tls_private_key](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version) | resource |
-| [aws_secretsmanager_secret_version.vault_enterprise_license](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version) | resource |
+| [aws_secretsmanager_secret_version.license](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version) | resource |
 | [aws_security_group.bastion](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
-| [aws_security_group.vault](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
+| [aws_security_group.vault_enterprise_servers](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_security_group.vpc_endpoints](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
-| [aws_ssm_parameter.vault_cluster_state](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_ssm_parameter.bootstrap_cluster_state](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_ssm_parameter.bootstrap_pki_state](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_ssm_parameter.vault_pki_intermediate_ca](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.vault_pki_intermediate_ca_csr](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
-| [aws_ssm_parameter.vault_pki_state](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
-| [aws_ssm_parameter.vault_tls_ca_bundle](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_vpc_endpoint.ec2](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_endpoint) | resource |
 | [aws_vpc_endpoint.kms](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_endpoint) | resource |
 | [aws_vpc_endpoint.s3](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_endpoint) | resource |
@@ -311,9 +127,9 @@ module "vault" {
 | [aws_vpc_security_group_egress_rule.bastion_all](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_egress_rule.vault_all](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.bastion_ssh](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
-| [aws_vpc_security_group_ingress_rule.vault_api](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
-| [aws_vpc_security_group_ingress_rule.vault_api_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
-| [aws_vpc_security_group_ingress_rule.vault_cluster](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
+| [aws_vpc_security_group_ingress_rule.vault_enterprise_api](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
+| [aws_vpc_security_group_ingress_rule.vault_enterprise_api_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
+| [aws_vpc_security_group_ingress_rule.vault_enterprise_cluster](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.vault_ssh](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.vpc_endpoints_https](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
 | [tls_cert_request.bootstrap_tls_cert_request](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/cert_request) | resource |
@@ -323,18 +139,18 @@ module "vault" {
 | [tls_self_signed_cert.bootstrap_tls_ca](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/self_signed_cert) | resource |
 | [aws_availability_zones.available](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/availability_zones) | data source |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
-| [aws_iam_policy_document.vault_server_assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_ec2_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_iam_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_kms_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_kms_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_s3_bucket_list](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_s3_object_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_secrets_manager_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_secrets_manager_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_secrets_manager_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_server_ssm_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [aws_iam_policy_document.vault_snapshots](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.deny_insecure_transport](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.ec2_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.iam_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.kms_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.kms_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.s3_bucket_list](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.s3_object_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.secrets_manager_describe](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.secrets_manager_read](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.secrets_manager_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.ssm_read_write](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_vpc.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc) | data source |
 
@@ -342,18 +158,17 @@ module "vault" {
 
 | Name | Description |
 | ---- | ----------- |
+| <a name="output_ami_name"></a> [ami\_name](#output\_ami\_name) | Name of the AMI used for EC2 instances. |
 | <a name="output_bastion_public_ip"></a> [bastion\_public\_ip](#output\_bastion\_public\_ip) | Public IP of the bastion host. |
-| <a name="output_ec2_ami_name"></a> [ec2\_ami\_name](#output\_ec2\_ami\_name) | Name of the AMI used for EC2 instances. |
-| <a name="output_vault_asg_name"></a> [vault\_asg\_name](#output\_vault\_asg\_name) | Name of the Vault Auto Scaling Group. |
-| <a name="output_vault_iam_role_name"></a> [vault\_iam\_role\_name](#output\_vault\_iam\_role\_name) | Name of the Vault server IAM role. |
-| <a name="output_vault_jwt_auth_path"></a> [vault\_jwt\_auth\_path](#output\_vault\_jwt\_auth\_path) | Vault JWT auth method path for HCP Terraform (TFC\_VAULT\_AUTH\_PATH). |
-| <a name="output_vault_jwt_auth_role_name"></a> [vault\_jwt\_auth\_role\_name](#output\_vault\_jwt\_auth\_role\_name) | Vault JWT auth role name for HCP Terraform (TFC\_VAULT\_RUN\_ROLE). |
-| <a name="output_vault_kms_key_id"></a> [vault\_kms\_key\_id](#output\_vault\_kms\_key\_id) | KMS key ID used for Vault auto-unseal. |
-| <a name="output_vault_pki_intermediate_ca_csr_ssm_parameter_name"></a> [vault\_pki\_intermediate\_ca\_csr\_ssm\_parameter\_name](#output\_vault\_pki\_intermediate\_ca\_csr\_ssm\_parameter\_name) | SSM parameter name where the intermediate CA CSR is published. |
-| <a name="output_vault_pki_intermediate_ca_signed_csr_secret_arn"></a> [vault\_pki\_intermediate\_ca\_signed\_csr\_secret\_arn](#output\_vault\_pki\_intermediate\_ca\_signed\_csr\_secret\_arn) | Secrets Manager ARN for the signed CSR and root CA PEM. |
-| <a name="output_vault_snapshots_bucket"></a> [vault\_snapshots\_bucket](#output\_vault\_snapshots\_bucket) | S3 bucket for Vault snapshots. |
-| <a name="output_vault_target_group_arn"></a> [vault\_target\_group\_arn](#output\_vault\_target\_group\_arn) | ARN of the Vault NLB target group. |
-| <a name="output_vault_tls_ca_bundle_ssm_parameter_name"></a> [vault\_tls\_ca\_bundle\_ssm\_parameter\_name](#output\_vault\_tls\_ca\_bundle\_ssm\_parameter\_name) | SSM Parameter for the Vault PKI managed TLS CA bundle. |
-| <a name="output_vault_url"></a> [vault\_url](#output\_vault\_url) | URL of the Vault cluster. |
+| <a name="output_bootstrap_cluster_state_ssm_parameter_name"></a> [bootstrap\_cluster\_state\_ssm\_parameter\_name](#output\_bootstrap\_cluster\_state\_ssm\_parameter\_name) | SSM Parameter for the bootstrap initialization state flag. |
+| <a name="output_bootstrap_pki_state_ssm_parameter_name"></a> [bootstrap\_pki\_state\_ssm\_parameter\_name](#output\_bootstrap\_pki\_state\_ssm\_parameter\_name) | SSM Parameter for the bootstrap PKI state flag. |
+| <a name="output_hcp_terraform_jwt_auth_mount_path"></a> [hcp\_terraform\_jwt\_auth\_mount\_path](#output\_hcp\_terraform\_jwt\_auth\_mount\_path) | Vault JWT auth method path for HCP Terraform (TFC\_VAULT\_AUTH\_PATH). |
+| <a name="output_hcp_terraform_jwt_auth_role_name"></a> [hcp\_terraform\_jwt\_auth\_role\_name](#output\_hcp\_terraform\_jwt\_auth\_role\_name) | Vault JWT auth role name for HCP Terraform (TFC\_VAULT\_RUN\_ROLE). |
+| <a name="output_vault_cluster_autoscaling_group_name"></a> [vault\_cluster\_autoscaling\_group\_name](#output\_vault\_cluster\_autoscaling\_group\_name) | Name of the Vault Enterprise Auto Scaling Group. |
+| <a name="output_vault_pki_intermediate_ca_csr_ssm_parameter_name"></a> [vault\_pki\_intermediate\_ca\_csr\_ssm\_parameter\_name](#output\_vault\_pki\_intermediate\_ca\_csr\_ssm\_parameter\_name) | SSM parameter name where the Vault PKI intermediate CA CSR is published. |
+| <a name="output_vault_pki_intermediate_ca_ssm_parameter_name"></a> [vault\_pki\_intermediate\_ca\_ssm\_parameter\_name](#output\_vault\_pki\_intermediate\_ca\_ssm\_parameter\_name) | SSM Parameter for the Vault PKI intermediate CA PEM. |
+| <a name="output_vault_pki_signed_intermediate_ca_secret_arn"></a> [vault\_pki\_signed\_intermediate\_ca\_secret\_arn](#output\_vault\_pki\_signed\_intermediate\_ca\_secret\_arn) | Secrets Manager ARN for the Vault PKI signed intermediate CA PEM. |
+| <a name="output_vault_snapshot_aws_s3_bucket_name"></a> [vault\_snapshot\_aws\_s3\_bucket\_name](#output\_vault\_snapshot\_aws\_s3\_bucket\_name) | Name of the S3 bucket for Vault Enterprise snapshots. |
+| <a name="output_vault_url"></a> [vault\_url](#output\_vault\_url) | URL of the Vault Enterprise cluster. |
 | <a name="output_vault_version"></a> [vault\_version](#output\_vault\_version) | Vault Enterprise version deployed. |
 <!-- END_TF_DOCS -->

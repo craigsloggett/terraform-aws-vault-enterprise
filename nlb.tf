@@ -1,8 +1,8 @@
-resource "aws_lb" "vault" {
-  name_prefix        = "vault-"
-  internal           = var.nlb_internal
+resource "aws_lb" "vault_enterprise" {
+  name_prefix        = var.nlb.name_prefix
+  internal           = var.nlb.internal
   load_balancer_type = "network"
-  subnets            = var.nlb_internal ? local.vpc.private_subnet_ids : local.vpc.public_subnet_ids
+  subnets            = var.nlb.internal ? local.vpc.private_subnet_ids : local.vpc.public_subnet_ids
 
   enable_cross_zone_load_balancing = true
 
@@ -11,8 +11,8 @@ resource "aws_lb" "vault" {
   }
 }
 
-resource "aws_lb_target_group" "vault" {
-  name_prefix = "vault-"
+resource "aws_lb_target_group" "vault_enterprise" {
+  name_prefix = var.nlb.lb_target_group.name_prefix
   port        = 8200
   protocol    = "TCP"
   vpc_id      = local.vpc.id
@@ -32,13 +32,13 @@ resource "aws_lb_target_group" "vault" {
   }
 }
 
-resource "aws_lb_listener" "vault" {
-  load_balancer_arn = aws_lb.vault.arn
+resource "aws_lb_listener" "vault_enterprise" {
+  load_balancer_arn = aws_lb.vault_enterprise.arn
   port              = 443
   protocol          = "TCP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.vault.arn
+    target_group_arn = aws_lb_target_group.vault_enterprise.arn
   }
 }

@@ -7,8 +7,15 @@ content: |-
   ## Usage
 
   ### main.tf
+
   ```hcl
-  {{ include "examples/self-signed-tls/main.tf" }}
+  {{ include "main.tf" }}
+  ```
+
+  ### tls.tf
+
+  ```hcl
+  {{ include "tls.tf" }}
   ```
 
   {{ .Requirements }}

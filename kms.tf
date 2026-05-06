@@ -1,14 +1,14 @@
-resource "aws_kms_key" "vault" {
+resource "aws_kms_key" "auto_unseal" {
   description             = "Vault Enterprise Auto-unseal Key"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
+  deletion_window_in_days = var.kms_key.deletion_window_in_days
+  enable_key_rotation     = var.kms_key.enable_key_rotation
 
   tags = {
-    Name = var.vault_aws_resource_names.vault_kms_key_name
+    Name = var.kms_key.name
   }
 }
 
-resource "aws_kms_alias" "vault" {
-  name          = "alias/${var.project_name}-vault-unseal"
-  target_key_id = aws_kms_key.vault.key_id
+resource "aws_kms_alias" "auto_unseal" {
+  name          = "alias/${var.kms_key.alias}"
+  target_key_id = aws_kms_key.auto_unseal.key_id
 }

@@ -3,8 +3,8 @@
   "aws_s3_bucket":     "${aws_s3_bucket}",
   "aws_s3_region":     "${aws_s3_region}",
   "aws_s3_enable_kms": true,
-  "path_prefix":       "snapshots/",
+  "path_prefix":       "${path_prefix}",
   "interval":          ${interval},
   "retain":            ${retain},
-  "file_prefix":       "vault-snapshot"
+  "file_prefix":       "${file_prefix}"
 }

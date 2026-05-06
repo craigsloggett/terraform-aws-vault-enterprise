@@ -1,4 +1,4 @@
-data "aws_iam_policy_document" "vault_server_assume_role" {
+data "aws_iam_policy_document" "assume_role" {
   statement {
     sid     = "EC2InstanceAssumeRole"
     effect  = "Allow"
@@ -11,19 +11,19 @@ data "aws_iam_policy_document" "vault_server_assume_role" {
   }
 }
 
-resource "aws_iam_role" "vault_server" {
+resource "aws_iam_role" "vault_enterprise" {
   name               = var.iam_role.name
   path               = var.iam_role.path
-  assume_role_policy = data.aws_iam_policy_document.vault_server_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
 }
 
-resource "aws_iam_instance_profile" "vault_server" {
+resource "aws_iam_instance_profile" "vault_enterprise" {
   name = var.iam_instance_profile.name
   path = var.iam_instance_profile.path
-  role = aws_iam_role.vault_server.name
+  role = aws_iam_role.vault_enterprise.name
 }
 
-data "aws_iam_policy_document" "vault_server_kms_read_write" {
+data "aws_iam_policy_document" "kms_read_write" {
   statement {
     sid    = "AutoUnsealSealOperations"
     effect = "Allow"
@@ -33,32 +33,32 @@ data "aws_iam_policy_document" "vault_server_kms_read_write" {
       "kms:Decrypt",
     ]
 
-    resources = [aws_kms_key.vault.arn]
+    resources = [aws_kms_key.auto_unseal.arn]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_kms_read_write" {
+resource "aws_iam_role_policy" "kms_read_write" {
   name   = var.iam_role.inline_policy_names.kms_read_write
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_kms_read_write.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.kms_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_server_kms_describe" {
+data "aws_iam_policy_document" "kms_describe" {
   statement {
     sid       = "AutoUnsealKeyValidation"
     effect    = "Allow"
     actions   = ["kms:DescribeKey"]
-    resources = [aws_kms_key.vault.arn]
+    resources = [aws_kms_key.auto_unseal.arn]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_kms_describe" {
+resource "aws_iam_role_policy" "kms_describe" {
   name   = var.iam_role.inline_policy_names.kms_describe
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_kms_describe.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.kms_describe.json
 }
 
-data "aws_iam_policy_document" "vault_server_secrets_manager_read" {
+data "aws_iam_policy_document" "secrets_manager_read" {
   statement {
     sid     = "BootstrapMaterialRead"
     effect  = "Allow"
@@ -68,34 +68,34 @@ data "aws_iam_policy_document" "vault_server_secrets_manager_read" {
       aws_secretsmanager_secret.bootstrap_tls_ca.arn,
       aws_secretsmanager_secret.bootstrap_tls_cert.arn,
       aws_secretsmanager_secret.bootstrap_tls_private_key.arn,
-      aws_secretsmanager_secret.vault_enterprise_license.arn,
-      aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn
+      aws_secretsmanager_secret.license.arn,
+      aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
     ]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_secrets_manager_read" {
+resource "aws_iam_role_policy" "secrets_manager_read" {
   name   = var.iam_role.inline_policy_names.secrets_manager_read
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_secrets_manager_read.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.secrets_manager_read.json
 }
 
-data "aws_iam_policy_document" "vault_server_secrets_manager_describe" {
+data "aws_iam_policy_document" "secrets_manager_describe" {
   statement {
-    sid       = "IntermediateCASignedCSRPolling"
+    sid       = "SignedIntermediateCAPolling"
     effect    = "Allow"
     actions   = ["secretsmanager:DescribeSecret"]
-    resources = [aws_secretsmanager_secret.vault_pki_intermediate_ca_signed_csr.arn]
+    resources = [aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_secrets_manager_describe" {
+resource "aws_iam_role_policy" "secrets_manager_describe" {
   name   = var.iam_role.inline_policy_names.secrets_manager_describe
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_secrets_manager_describe.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.secrets_manager_describe.json
 }
 
-data "aws_iam_policy_document" "vault_server_secrets_manager_read_write" {
+data "aws_iam_policy_document" "secrets_manager_read_write" {
   statement {
     sid    = "ClusterInitOutputPersistence"
     effect = "Allow"
@@ -106,19 +106,19 @@ data "aws_iam_policy_document" "vault_server_secrets_manager_read_write" {
     ]
 
     resources = [
-      aws_secretsmanager_secret.vault_server_bootstrap_root_token.arn,
-      aws_secretsmanager_secret.vault_recovery_keys.arn,
+      aws_secretsmanager_secret.root_token.arn,
+      aws_secretsmanager_secret.recovery_keys.arn,
     ]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_secrets_manager_read_write" {
+resource "aws_iam_role_policy" "secrets_manager_read_write" {
   name   = var.iam_role.inline_policy_names.secrets_manager_read_write
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_secrets_manager_read_write.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.secrets_manager_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_server_s3_object_read_write" {
+data "aws_iam_policy_document" "s3_object_read_write" {
   statement {
     sid    = "RaftSnapshotObjectManagement"
     effect = "Allow"
@@ -129,32 +129,32 @@ data "aws_iam_policy_document" "vault_server_s3_object_read_write" {
       "s3:DeleteObject",
     ]
 
-    resources = ["${aws_s3_bucket.vault_snapshots.arn}/*"]
+    resources = ["${aws_s3_bucket.snapshots.arn}/*"]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_s3_object_read_write" {
+resource "aws_iam_role_policy" "s3_object_read_write" {
   name   = var.iam_role.inline_policy_names.s3_object_read_write
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_s3_object_read_write.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.s3_object_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_server_s3_bucket_list" {
+data "aws_iam_policy_document" "s3_bucket_list" {
   statement {
     sid       = "RaftSnapshotEnumeration"
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.vault_snapshots.arn]
+    resources = [aws_s3_bucket.snapshots.arn]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_s3_bucket_list" {
+resource "aws_iam_role_policy" "s3_bucket_list" {
   name   = var.iam_role.inline_policy_names.s3_bucket_list
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_s3_bucket_list.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.s3_bucket_list.json
 }
 
-data "aws_iam_policy_document" "vault_server_ec2_describe" {
+data "aws_iam_policy_document" "ec2_describe" {
   statement {
     sid       = "RaftAutoJoinDiscovery"
     effect    = "Allow"
@@ -163,13 +163,13 @@ data "aws_iam_policy_document" "vault_server_ec2_describe" {
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_ec2_describe" {
+resource "aws_iam_role_policy" "ec2_describe" {
   name   = var.iam_role.inline_policy_names.ec2_describe
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_ec2_describe.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.ec2_describe.json
 }
 
-data "aws_iam_policy_document" "vault_server_ssm_read_write" {
+data "aws_iam_policy_document" "ssm_read_write" {
   statement {
     sid    = "ClusterCoordinationState"
     effect = "Allow"
@@ -180,21 +180,21 @@ data "aws_iam_policy_document" "vault_server_ssm_read_write" {
     ]
 
     resources = [
-      aws_ssm_parameter.vault_cluster_state.arn,
-      aws_ssm_parameter.vault_pki_state.arn,
-      aws_ssm_parameter.vault_tls_ca_bundle.arn,
+      aws_ssm_parameter.bootstrap_cluster_state.arn,
+      aws_ssm_parameter.bootstrap_pki_state.arn,
+      aws_ssm_parameter.vault_pki_intermediate_ca.arn,
       aws_ssm_parameter.vault_pki_intermediate_ca_csr.arn,
     ]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_ssm_read_write" {
+resource "aws_iam_role_policy" "ssm_read_write" {
   name   = var.iam_role.inline_policy_names.ssm_read_write
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_ssm_read_write.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.ssm_read_write.json
 }
 
-data "aws_iam_policy_document" "vault_server_iam_read" {
+data "aws_iam_policy_document" "iam_read" {
   statement {
     sid    = "ResolveIAMRoleARN"
     effect = "Allow"
@@ -203,12 +203,12 @@ data "aws_iam_policy_document" "vault_server_iam_read" {
       "iam:GetRole",
     ]
 
-    resources = [aws_iam_role.vault_server.arn]
+    resources = [aws_iam_role.vault_enterprise.arn]
   }
 }
 
-resource "aws_iam_role_policy" "vault_server_iam_read" {
+resource "aws_iam_role_policy" "iam_read" {
   name   = var.iam_role.inline_policy_names.iam_read
-  role   = aws_iam_role.vault_server.id
-  policy = data.aws_iam_policy_document.vault_server_iam_read.json
+  role   = aws_iam_role.vault_enterprise.id
+  policy = data.aws_iam_policy_document.iam_read.json
 }
