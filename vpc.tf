@@ -31,7 +31,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   private_dns_enabled = true
 
   tags = {
-    Name = var.vpc_endpoints.secretsmanager_name
+    Name = var.vpc.endpoints.secretsmanager_name
   }
 }
 
@@ -46,7 +46,7 @@ resource "aws_vpc_endpoint" "kms" {
   private_dns_enabled = true
 
   tags = {
-    Name = var.vpc_endpoints.kms_name
+    Name = var.vpc.endpoints.kms_name
   }
 }
 
@@ -61,7 +61,7 @@ resource "aws_vpc_endpoint" "ec2" {
   private_dns_enabled = true
 
   tags = {
-    Name = var.vpc_endpoints.ec2_name
+    Name = var.vpc.endpoints.ec2_name
   }
 }
 
@@ -74,7 +74,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = module.vpc[0].private_route_table_ids
 
   tags = {
-    Name = var.vpc_endpoints.s3_name
+    Name = var.vpc.endpoints.s3_name
   }
 }
 
@@ -174,12 +174,12 @@ resource "aws_vpc_security_group_egress_rule" "vault_all" {
 resource "aws_security_group" "vpc_endpoints" {
   count = var.vpc.existing == null ? 1 : 0
 
-  name_prefix = var.vpc_endpoints.security_group.name_prefix
+  name_prefix = var.vpc.endpoints.security_group.name_prefix
   description = "Vault Enterprise VPC endpoints security group"
   vpc_id      = module.vpc[0].vpc_id
 
   tags = {
-    Name = var.vpc_endpoints.security_group.name
+    Name = var.vpc.endpoints.security_group.name
   }
 
   lifecycle {

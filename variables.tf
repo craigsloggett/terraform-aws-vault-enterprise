@@ -43,6 +43,18 @@ variable "vpc" {
     private_subnets = optional(list(string), ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"])
     public_subnets  = optional(list(string), ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"])
 
+    endpoints = optional(object({
+      secretsmanager_name = optional(string, "vault-enterprise-secretsmanager-vpc-endpoint")
+      kms_name            = optional(string, "vault-enterprise-kms-vpc-endpoint")
+      ec2_name            = optional(string, "vault-enterprise-ec2-vpc-endpoint")
+      s3_name             = optional(string, "vault-enterprise-s3-vpc-endpoint")
+
+      security_group = optional(object({
+        name_prefix = optional(string, "vault-enterprise-vpc-endpoints-")
+        name        = optional(string, "vault-enterprise-vpc-endpoints")
+      }), {})
+    }), {})
+
     existing = optional(object({
       vpc_id             = string
       private_subnet_ids = list(string)
@@ -62,26 +74,6 @@ variable "vpc" {
     condition     = var.vpc.existing == null || (length(var.vpc.existing.private_subnet_ids) > 0 && length(var.vpc.existing.public_subnet_ids) > 0)
     error_message = "vpc.existing subnet ID lists must be non-empty when existing is set."
   }
-}
-
-variable "vpc_endpoints" {
-  type = object({
-    secretsmanager_name = optional(string, "vault-enterprise-secretsmanager-vpc-endpoint")
-    kms_name            = optional(string, "vault-enterprise-kms-vpc-endpoint")
-    ec2_name            = optional(string, "vault-enterprise-ec2-vpc-endpoint")
-    s3_name             = optional(string, "vault-enterprise-s3-vpc-endpoint")
-
-    security_group = optional(object({
-      name_prefix = optional(string, "vault-enterprise-vpc-endpoints-")
-      name        = optional(string, "vault-enterprise-vpc-endpoints")
-    }), {})
-  })
-
-  default     = {}
-  description = <<-EOT
-    Configuration for the VPC endpoints created by this module. Only created
-    when `vpc.existing` is null.
-  EOT
 }
 
 variable "bastion" {
