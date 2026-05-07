@@ -17,6 +17,157 @@ variable "route53_zone" {
 
 # Optional
 
+variable "vault" {
+  type = object({
+    version       = optional(string, "1.21.4+ent")
+    ui            = optional(bool, true)
+    disable_mlock = optional(bool, true)
+    cluster_name  = optional(string, "vault-enterprise")
+
+    log_level  = optional(string, "info")
+    log_format = optional(string, "json")
+
+    listener_tcp = optional(object({
+      tls_min_version = optional(string, "tls13")
+    }), {})
+
+    telemetry = optional(object({
+      prometheus_retention_time = optional(string, "24h")
+      disable_hostname          = optional(bool, true)
+    }), {})
+
+    secretsmanager_secret = optional(object({
+      license_name_prefix       = optional(string, "vault-enterprise-license-")
+      recovery_keys_name_prefix = optional(string, "vault-enterprise-recovery-keys-")
+      root_token_name_prefix    = optional(string, "vault-enterprise-root-token-")
+    }), {})
+  })
+
+  default     = {}
+  description = "Vault Enterprise product configuration."
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+\\+ent(\\.hsm)?(\\.fips1402)?$", var.vault.version))
+    error_message = "vault.version must be a valid Vault Enterprise release version (e.g., 1.21.4+ent, 1.21.4+ent.hsm, 1.21.4+ent.fips1402)."
+  }
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9_-]*$", var.vault.cluster_name))
+    error_message = "vault.cluster_name must start with an alphanumeric character and contain only alphanumeric characters, underscores, and hyphens."
+  }
+}
+
+variable "vault_autopilot" {
+  type = object({
+    cleanup_dead_servers               = optional(bool, true)
+    dead_server_last_contact_threshold = optional(string, "24h")
+  })
+
+  default     = {}
+  description = "Vault Enterprise autopilot configuration."
+
+  validation {
+    condition     = can(timeadd("2000-01-01T00:00:00Z", var.vault_autopilot.dead_server_last_contact_threshold))
+    error_message = "vault_autopilot.dead_server_last_contact_threshold must be a Go duration string (e.g., \"24h\", \"30m\", \"1h30m\"). Valid units: \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"."
+  }
+}
+
+variable "vault_snapshot" {
+  type = object({
+    aws_s3_bucket = optional(object({
+      name_prefix   = optional(string, "vault-enterprise-snapshots-")
+      force_destroy = optional(bool, false)
+    }), {})
+    path_prefix = optional(string, "snapshots/")
+    file_prefix = optional(string, "vault-snapshot")
+    interval    = optional(number, 3600)
+    retain      = optional(number, 72)
+  })
+
+  default     = {}
+  description = "Vault Enterprise snapshot configuration."
+
+  validation {
+    condition     = var.vault_snapshot.interval >= 60
+    error_message = "vault_snapshot.interval must be at least 60 seconds."
+  }
+
+  validation {
+    condition     = var.vault_snapshot.retain >= 1
+    error_message = "vault_snapshot.retain must be at least 1."
+  }
+}
+
+variable "vault_auth" {
+  type = object({
+    aws = optional(object({
+      role_ttl     = optional(string, "4h")
+      role_max_ttl = optional(string, "24h")
+    }), {})
+
+    jwt = optional(object({
+      role_ttl     = optional(string, "1h")
+      role_max_ttl = optional(string, "2h")
+    }), {})
+  })
+
+  default     = {}
+  description = <<-EOT
+    TTL configuration for Vault auth method roles.
+  EOT
+}
+
+variable "vault_pki" {
+  type = object({
+    mount_path                                = optional(string, "pki_vault")
+    mount_max_ttl                             = optional(string, "26280h")
+    server_role_max_ttl                       = optional(string, "24h")
+    server_cert_ttl                           = optional(string, "24h")
+    signed_intermediate_poll_interval_seconds = optional(number, 10)
+    signed_intermediate_wait_timeout_seconds  = optional(number, 1800)
+
+    secretsmanager_secret = optional(object({
+      signed_intermediate_ca_name_prefix = optional(string, "vault-enterprise-signed-intermediate-ca-")
+    }), {})
+
+    ssm_parameter = optional(object({
+      intermediate_ca_name     = optional(string, "/vault-enterprise/pki/intermediate-ca")
+      intermediate_ca_csr_name = optional(string, "/vault-enterprise/pki/intermediate-ca-csr")
+    }), {})
+
+    intermediate_ca = optional(object({
+      common_name  = optional(string, "Vault Intermediate CA")
+      country      = optional(string, "")
+      organization = optional(string, "")
+      key_type     = optional(string, "rsa")
+      key_bits     = optional(number, 2048)
+    }), {})
+  })
+
+  default     = {}
+  description = "Vault PKI secrets engine configuration."
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9_-]+$", var.vault_pki.mount_path))
+    error_message = "vault_pki.mount_path must contain only alphanumeric characters, underscores, and hyphens."
+  }
+
+  validation {
+    condition     = contains(["ec", "rsa"], var.vault_pki.intermediate_ca.key_type)
+    error_message = "vault_pki.intermediate_ca.key_type must be 'ec' or 'rsa'."
+  }
+
+  validation {
+    condition     = var.vault_pki.intermediate_ca.key_type != "ec" || contains([224, 256, 384, 521], var.vault_pki.intermediate_ca.key_bits)
+    error_message = "vault_pki.intermediate_ca.key_bits for 'ec' must be 224, 256, 384, or 521."
+  }
+
+  validation {
+    condition     = var.vault_pki.intermediate_ca.key_type != "rsa" || contains([2048, 3072, 4096, 8192], var.vault_pki.intermediate_ca.key_bits)
+    error_message = "vault_pki.intermediate_ca.key_bits for 'rsa' must be 2048, 3072, 4096, or 8192."
+  }
+}
+
 variable "ami" {
   type = object({
     owners = optional(list(string), ["amazon"])
@@ -315,157 +466,6 @@ variable "route53_record" {
   validation {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.route53_record.subdomain))
     error_message = "route53_record.subdomain must be a valid DNS label (lowercase alphanumeric and hyphens, not starting or ending with a hyphen)."
-  }
-}
-
-variable "vault" {
-  type = object({
-    version       = optional(string, "1.21.4+ent")
-    ui            = optional(bool, true)
-    disable_mlock = optional(bool, true)
-    cluster_name  = optional(string, "vault-enterprise")
-
-    log_level  = optional(string, "info")
-    log_format = optional(string, "json")
-
-    listener_tcp = optional(object({
-      tls_min_version = optional(string, "tls13")
-    }), {})
-
-    telemetry = optional(object({
-      prometheus_retention_time = optional(string, "24h")
-      disable_hostname          = optional(bool, true)
-    }), {})
-
-    secretsmanager_secret = optional(object({
-      license_name_prefix       = optional(string, "vault-enterprise-license-")
-      recovery_keys_name_prefix = optional(string, "vault-enterprise-recovery-keys-")
-      root_token_name_prefix    = optional(string, "vault-enterprise-root-token-")
-    }), {})
-  })
-
-  default     = {}
-  description = "Vault Enterprise product configuration."
-
-  validation {
-    condition     = can(regex("^\\d+\\.\\d+\\.\\d+\\+ent(\\.hsm)?(\\.fips1402)?$", var.vault.version))
-    error_message = "vault.version must be a valid Vault Enterprise release version (e.g., 1.21.4+ent, 1.21.4+ent.hsm, 1.21.4+ent.fips1402)."
-  }
-
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9_-]*$", var.vault.cluster_name))
-    error_message = "vault.cluster_name must start with an alphanumeric character and contain only alphanumeric characters, underscores, and hyphens."
-  }
-}
-
-variable "vault_autopilot" {
-  type = object({
-    cleanup_dead_servers               = optional(bool, true)
-    dead_server_last_contact_threshold = optional(string, "24h")
-  })
-
-  default     = {}
-  description = "Vault Enterprise autopilot configuration."
-
-  validation {
-    condition     = can(timeadd("2000-01-01T00:00:00Z", var.vault_autopilot.dead_server_last_contact_threshold))
-    error_message = "vault_autopilot.dead_server_last_contact_threshold must be a Go duration string (e.g., \"24h\", \"30m\", \"1h30m\"). Valid units: \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"."
-  }
-}
-
-variable "vault_snapshot" {
-  type = object({
-    aws_s3_bucket = optional(object({
-      name_prefix   = optional(string, "vault-enterprise-snapshots-")
-      force_destroy = optional(bool, false)
-    }), {})
-    path_prefix = optional(string, "snapshots/")
-    file_prefix = optional(string, "vault-snapshot")
-    interval    = optional(number, 3600)
-    retain      = optional(number, 72)
-  })
-
-  default     = {}
-  description = "Vault Enterprise snapshot configuration."
-
-  validation {
-    condition     = var.vault_snapshot.interval >= 60
-    error_message = "vault_snapshot.interval must be at least 60 seconds."
-  }
-
-  validation {
-    condition     = var.vault_snapshot.retain >= 1
-    error_message = "vault_snapshot.retain must be at least 1."
-  }
-}
-
-variable "vault_auth" {
-  type = object({
-    aws = optional(object({
-      role_ttl     = optional(string, "4h")
-      role_max_ttl = optional(string, "24h")
-    }), {})
-
-    jwt = optional(object({
-      role_ttl     = optional(string, "1h")
-      role_max_ttl = optional(string, "2h")
-    }), {})
-  })
-
-  default     = {}
-  description = <<-EOT
-    TTL configuration for Vault auth method roles.
-  EOT
-}
-
-variable "vault_pki" {
-  type = object({
-    mount_path                                = optional(string, "pki_vault")
-    mount_max_ttl                             = optional(string, "26280h")
-    server_role_max_ttl                       = optional(string, "24h")
-    server_cert_ttl                           = optional(string, "24h")
-    signed_intermediate_poll_interval_seconds = optional(number, 10)
-    signed_intermediate_wait_timeout_seconds  = optional(number, 1800)
-
-    secretsmanager_secret = optional(object({
-      signed_intermediate_ca_name_prefix = optional(string, "vault-enterprise-signed-intermediate-ca-")
-    }), {})
-
-    ssm_parameter = optional(object({
-      intermediate_ca_name     = optional(string, "/vault-enterprise/pki/intermediate-ca")
-      intermediate_ca_csr_name = optional(string, "/vault-enterprise/pki/intermediate-ca-csr")
-    }), {})
-
-    intermediate_ca = optional(object({
-      common_name  = optional(string, "Vault Intermediate CA")
-      country      = optional(string, "")
-      organization = optional(string, "")
-      key_type     = optional(string, "rsa")
-      key_bits     = optional(number, 2048)
-    }), {})
-  })
-
-  default     = {}
-  description = "Vault PKI secrets engine configuration."
-
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9_-]+$", var.vault_pki.mount_path))
-    error_message = "vault_pki.mount_path must contain only alphanumeric characters, underscores, and hyphens."
-  }
-
-  validation {
-    condition     = contains(["ec", "rsa"], var.vault_pki.intermediate_ca.key_type)
-    error_message = "vault_pki.intermediate_ca.key_type must be 'ec' or 'rsa'."
-  }
-
-  validation {
-    condition     = var.vault_pki.intermediate_ca.key_type != "ec" || contains([224, 256, 384, 521], var.vault_pki.intermediate_ca.key_bits)
-    error_message = "vault_pki.intermediate_ca.key_bits for 'ec' must be 224, 256, 384, or 521."
-  }
-
-  validation {
-    condition     = var.vault_pki.intermediate_ca.key_type != "rsa" || contains([2048, 3072, 4096, 8192], var.vault_pki.intermediate_ca.key_bits)
-    error_message = "vault_pki.intermediate_ca.key_bits for 'rsa' must be 2048, 3072, 4096, or 8192."
   }
 }
 
