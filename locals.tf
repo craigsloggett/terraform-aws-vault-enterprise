@@ -18,7 +18,7 @@ locals {
   #   n=3 --> 66% (1 node out, 2 healthy)
   #   n=5 --> 80% (1 node out, 4 healthy)
   instance_refresh_min_healthy_pct = floor(
-    (var.vault_cluster.node_count - 1) * 100 / var.vault_cluster.node_count
+    (var.compute.node_count - 1) * 100 / var.compute.node_count
   )
 
   # Environment Configuration
@@ -27,6 +27,22 @@ locals {
   # EBS Configuration
   ebs_raft_device_name  = "/dev/xvdf"
   ebs_audit_device_name = "/dev/xvdg"
+
+  # Source: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-optimized.html
+  # bandwidth_mbps is decimal megabits/sec as AWS publishes it.
+  # gp3 throughput is documented in MiB/s.
+  # 1 Mbps = 10^6 / 8 bytes/s; divide by 2^20 for MiB/s.
+  ebs_baseline_raw = {
+    "m5.large"  = { iops = 3600, bandwidth_mbps = 650 }
+    "t3.medium" = { iops = 2000, bandwidth_mbps = 347 }
+  }
+
+  ebs_baseline = {
+    for k, v in local.ebs_baseline_raw : k => {
+      iops       = v.iops
+      throughput = floor(v.bandwidth_mbps * 1000000 / 8 / 1048576)
+    }
+  }
 
   # Vault Server Configuration
   config_vault_service          = file("${path.module}/files/vault/vault.service")
@@ -38,19 +54,19 @@ locals {
   })
 
   config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
-    ui                                = var.vault.ui
-    disable_mlock                     = var.vault.disable_mlock
-    cluster_name                      = var.vault.cluster_name
-    log_level                         = var.vault.log_level
-    log_format                        = var.vault.log_format
-    tls_min_version                   = var.vault.listener_tcp.tls_min_version
-    prometheus_retention_time         = var.vault.telemetry.prometheus_retention_time
-    disable_hostname                  = var.vault.telemetry.disable_hostname
-    vault_fqdn                        = local.vault_fqdn
-    aws_region                        = data.aws_region.current.region
-    kms_key_alias                     = aws_kms_alias.auto_unseal.name
-    vault_cluster_auto_join_tag_key   = var.vault_cluster.auto_join.tag_key
-    vault_cluster_auto_join_tag_value = var.vault_cluster.auto_join.tag_value
+    ui                        = var.vault.ui
+    disable_mlock             = var.vault.disable_mlock
+    cluster_name              = var.vault.cluster_name
+    log_level                 = var.vault.log_level
+    log_format                = var.vault.log_format
+    tls_min_version           = var.vault.listener_tcp.tls_min_version
+    prometheus_retention_time = var.vault.telemetry.prometheus_retention_time
+    disable_hostname          = var.vault.telemetry.disable_hostname
+    vault_fqdn                = local.vault_fqdn
+    aws_region                = data.aws_region.current.region
+    kms_key_alias             = aws_kms_alias.auto_unseal.name
+    auto_join_tag_key         = var.compute.auto_join.tag_key
+    auto_join_tag_value       = var.compute.auto_join.tag_value
   })
 
   config_vault_snapshot_json = templatefile("${path.module}/templates/vault/snapshot.json.tftpl", {
