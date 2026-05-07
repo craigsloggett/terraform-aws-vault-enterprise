@@ -40,7 +40,7 @@ locals {
   ebs_baseline = {
     for k, v in local.ebs_baseline_raw : k => {
       iops       = v.iops
-      throughput = v.bandwidth_mbps * 1000000 / 8 / 1048576
+      throughput = floor(v.bandwidth_mbps * 1000000 / 8 / 1048576)
     }
   }
 
