@@ -332,17 +332,17 @@ variable "compute" {
 
   validation {
     condition     = contains([3, 5], var.compute.node_count)
-    error_message = "vault_cluster.node_count must be 3 or 5 for Raft quorum."
+    error_message = "compute.node_count must be 3 or 5 for Raft quorum."
   }
 
   validation {
     condition     = var.compute.root_volume_size >= 20
-    error_message = "vault_cluster.root_volume_size must be at least 20 GiB."
+    error_message = "compute.root_volume_size must be at least 20 GiB."
   }
 
   validation {
     condition     = length(var.compute.auto_join.tag_value) > 0
-    error_message = "vault_cluster.auto_join.tag_value must be a non-empty string to prevent accidentally joining an existing cluster."
+    error_message = "compute.auto_join.tag_value must be a non-empty string to prevent accidentally joining an existing cluster."
   }
 
   validation {
