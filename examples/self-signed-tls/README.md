@@ -58,23 +58,12 @@ data "aws_route53_zone" "selected" {
   name = var.route53_zone_name
 }
 
-data "aws_ami" "selected" {
-  most_recent = true
-  owners      = [var.ami_owner]
-
-  filter {
-    name   = "name"
-    values = [var.ami_name]
-  }
-}
-
 module "vault" {
   # tflint-ignore: terraform_module_pinned_source
   source = "git::https://github.com/craigsloggett/terraform-aws-vault-enterprise"
 
   vault_enterprise_license = var.vault_enterprise_license
   route53_zone             = data.aws_route53_zone.selected
-  ami                      = data.aws_ami.selected
 }
 ```
 
@@ -188,7 +177,6 @@ resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" 
 | [tls_locally_signed_cert.vault_pki_signed_intermediate_ca](https://registry.terraform.io/providers/hashicorp/tls/4.2.1/docs/resources/locally_signed_cert) | resource |
 | [tls_private_key.root_ca](https://registry.terraform.io/providers/hashicorp/tls/4.2.1/docs/resources/private_key) | resource |
 | [tls_self_signed_cert.root_ca](https://registry.terraform.io/providers/hashicorp/tls/4.2.1/docs/resources/self_signed_cert) | resource |
-| [aws_ami.selected](https://registry.terraform.io/providers/hashicorp/aws/6.43.0/docs/data-sources/ami) | data source |
 | [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/6.43.0/docs/data-sources/region) | data source |
 | [aws_route53_zone.selected](https://registry.terraform.io/providers/hashicorp/aws/6.43.0/docs/data-sources/route53_zone) | data source |
 | [aws_ssm_parameter.vault_pki_intermediate_ca_csr](https://registry.terraform.io/providers/hashicorp/aws/6.43.0/docs/data-sources/ssm_parameter) | data source |
