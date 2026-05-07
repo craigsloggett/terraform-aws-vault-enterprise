@@ -13,7 +13,7 @@ output "bastion_public_ip" {
   value       = aws_instance.bastion.public_ip
 }
 
-output "vault_cluster_autoscaling_group_name" {
+output "autoscaling_group_name" {
   description = "Name of the Vault Enterprise Auto Scaling Group."
   value       = aws_autoscaling_group.vault_enterprise.name
 }
