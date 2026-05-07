@@ -295,14 +295,12 @@ variable "compute" {
     root_volume_size = optional(number, 50)
 
     raft_data_disk = optional(object({
-      volume_type = optional(string, "gp3")
       volume_size = optional(number, 50)
       iops        = optional(number, 3000)
       throughput  = optional(number, 125)
     }), {})
 
     audit_disk = optional(object({
-      volume_type = optional(string, "gp3")
       volume_size = optional(number, 50)
       iops        = optional(number, 3000)
       throughput  = optional(number, 125)

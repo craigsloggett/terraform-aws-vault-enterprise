@@ -134,7 +134,7 @@ resource "aws_launch_template" "vault_enterprise" {
     device_name = "/dev/xvdf"
 
     ebs {
-      volume_type           = var.compute.raft_data_disk.volume_type
+      volume_type           = "gp3"
       volume_size           = var.compute.raft_data_disk.volume_size
       iops                  = var.compute.raft_data_disk.iops
       throughput            = var.compute.raft_data_disk.throughput
@@ -148,7 +148,7 @@ resource "aws_launch_template" "vault_enterprise" {
     device_name = "/dev/xvdg"
 
     ebs {
-      volume_type           = var.compute.audit_disk.volume_type
+      volume_type           = "gp3"
       volume_size           = var.compute.audit_disk.volume_size
       iops                  = var.compute.audit_disk.iops
       throughput            = var.compute.audit_disk.throughput
