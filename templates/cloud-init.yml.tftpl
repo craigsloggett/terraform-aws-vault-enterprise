@@ -41,6 +41,11 @@ write_files:
     permissions: '0755'
     content: |
       ${indent(6, vault_bootstrap_script)}
+  - path: /var/lib/cloud/scripts/configure-autopilot.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      ${indent(6, configure_autopilot_script)}
 
 runcmd:
   - [install, -d, -o, vault, -g, vault, -m, '755', /opt/vault]
@@ -53,3 +58,4 @@ runcmd:
   - [/var/lib/cloud/scripts/determine-vault-node-role.sh]
   - [/var/lib/cloud/scripts/install-vault.sh]
   - [/var/lib/cloud/scripts/vault-bootstrap.sh]
+  - [/var/lib/cloud/scripts/configure-autopilot.sh]

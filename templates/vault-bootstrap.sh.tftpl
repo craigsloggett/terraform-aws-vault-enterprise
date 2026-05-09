@@ -65,11 +65,6 @@ readonly BOOTSTRAP_NODE_ID_NAME="${bootstrap_node_id_name}"
 readonly ROOT_TOKEN_SECRET_ARN="${root_token_secret_arn}"
 readonly RECOVERY_KEYS_SECRET_ARN="${recovery_keys_secret_arn}"
 
-# Autopilot
-readonly VAULT_AUTOPILOT_CLEANUP_DEAD_SERVERS="${vault_autopilot_cleanup_dead_servers}"
-readonly VAULT_AUTOPILOT_DEAD_SERVER_LAST_CONTACT_THRESHOLD="${vault_autopilot_dead_server_last_contact_threshold}"
-readonly VAULT_AUTOPILOT_MIN_QUORUM="${vault_autopilot_min_quorum}"
-
 # PKI and TLS
 readonly VAULT_PKI_MOUNT_PATH="${vault_pki_mount_path}"
 readonly VAULT_PKI_VAULT_MOUNT_MAX_TTL="${vault_pki_vault_mount_max_ttl}"
@@ -631,15 +626,6 @@ configure_file_audit_device() (
   fi
 )
 
-configure_autopilot() (
-  log_info "Configuring Raft Autopilot"
-
-  vault operator raft autopilot set-config \
-    -cleanup-dead-servers=$${VAULT_AUTOPILOT_CLEANUP_DEAD_SERVERS} \
-    -dead-server-last-contact-threshold=$${VAULT_AUTOPILOT_DEAD_SERVER_LAST_CONTACT_THRESHOLD} \
-    -min-quorum=$${VAULT_AUTOPILOT_MIN_QUORUM}
-)
-
 configure_snapshots() (
   log_info "Configuring automated Raft snapshots"
 
@@ -1138,7 +1124,6 @@ main() {
     VAULT_TOKEN="$(fetch_secret "$${ROOT_TOKEN_SECRET_ARN}")"
     export VAULT_TOKEN
 
-    configure_autopilot
     configure_snapshots
   else
     join_cluster

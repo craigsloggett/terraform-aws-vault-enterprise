@@ -45,15 +45,21 @@ resource "aws_launch_template" "vault_enterprise" {
 
   user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.yml.tftpl", {
     bootstrap_env_file = templatefile("${path.module}/templates/bootstrap.env.tftpl", {
-      auto_join_tag_key            = var.compute.auto_join.tag_key
-      auto_join_tag_value          = var.compute.auto_join.tag_value
-      bootstrap_cluster_state_name = aws_ssm_parameter.bootstrap_cluster_state.name
-      bootstrap_node_id_name       = aws_ssm_parameter.bootstrap_node_id.name
-      vault_version                = var.vault.version
+      auto_join_tag_key                                  = var.compute.auto_join.tag_key
+      auto_join_tag_value                                = var.compute.auto_join.tag_value
+      bootstrap_cluster_state_name                       = aws_ssm_parameter.bootstrap_cluster_state.name
+      bootstrap_node_id_name                             = aws_ssm_parameter.bootstrap_node_id.name
+      root_token_secret_arn                              = aws_secretsmanager_secret.root_token.arn
+      vault_fqdn                                         = local.vault_fqdn
+      vault_version                                      = var.vault.version
+      vault_autopilot_cleanup_dead_servers               = var.vault_autopilot.cleanup_dead_servers
+      vault_autopilot_dead_server_last_contact_threshold = var.vault_autopilot.dead_server_last_contact_threshold
+      vault_autopilot_min_quorum                         = max(3, floor(var.compute.node_count / 2) + 1)
     })
 
     determine_vault_node_role_script = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
     install_vault_script             = file("${path.module}/files/bootstrap/install-vault.sh")
+    configure_autopilot_script       = file("${path.module}/files/bootstrap/configure-autopilot.sh")
 
     vault_bootstrap_script = templatefile("${path.module}/templates/vault-bootstrap.sh.tftpl", {
       # Environment Configuration
@@ -83,11 +89,6 @@ resource "aws_launch_template" "vault_enterprise" {
       bootstrap_node_id_name       = aws_ssm_parameter.bootstrap_node_id.name
       root_token_secret_arn        = aws_secretsmanager_secret.root_token.arn
       recovery_keys_secret_arn     = aws_secretsmanager_secret.recovery_keys.arn
-
-      # Autopilot Configuration
-      vault_autopilot_cleanup_dead_servers               = var.vault_autopilot.cleanup_dead_servers
-      vault_autopilot_dead_server_last_contact_threshold = var.vault_autopilot.dead_server_last_contact_threshold
-      vault_autopilot_min_quorum                         = max(3, floor(var.compute.node_count / 2) + 1)
 
       # PKI and TLS Configuration
       vault_pki_intermediate_ca_common_name               = var.vault_pki.intermediate_ca.common_name
