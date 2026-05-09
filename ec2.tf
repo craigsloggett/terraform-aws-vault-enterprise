@@ -49,14 +49,15 @@ resource "aws_launch_template" "vault_enterprise" {
       auto_join_tag_value          = var.compute.auto_join.tag_value
       bootstrap_cluster_state_name = aws_ssm_parameter.bootstrap_cluster_state.name
       bootstrap_node_id_name       = aws_ssm_parameter.bootstrap_node_id.name
+      vault_version                = var.vault.version
     })
 
     determine_vault_node_role_script = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
+    install_vault_script             = file("${path.module}/files/bootstrap/install-vault.sh")
 
     vault_bootstrap_script = templatefile("${path.module}/templates/vault-bootstrap.sh.tftpl", {
       # Environment Configuration
       vault_fqdn         = local.vault_fqdn
-      vault_version      = var.vault.version
       license_secret_arn = aws_secretsmanager_secret.license.arn
 
       # EBS Configuration

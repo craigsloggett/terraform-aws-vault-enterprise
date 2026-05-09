@@ -31,6 +31,11 @@ write_files:
     permissions: '0755'
     encoding: b64
     content: ${base64encode(determine_vault_node_role_script)}
+  - path: /var/lib/cloud/scripts/install-vault.sh
+    owner: root:root
+    permissions: '0755'
+    encoding: b64
+    content: ${base64encode(install_vault_script)}
   - path: /var/lib/cloud/scripts/vault-bootstrap.sh
     owner: root:root
     permissions: '0755'
@@ -46,4 +51,5 @@ runcmd:
   - [install, -d, -o, vault, -g, vault, -m, '755', /etc/vault.d/policies]
   - [install, -d, -o, vault, -g, vault, -m, '755', /etc/vault.d/templates]
   - [/var/lib/cloud/scripts/determine-vault-node-role.sh]
+  - [/var/lib/cloud/scripts/install-vault.sh]
   - [/var/lib/cloud/scripts/vault-bootstrap.sh]
