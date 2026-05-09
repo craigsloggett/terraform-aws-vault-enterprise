@@ -572,6 +572,7 @@ variable "bootstrap" {
     ssm_parameter = optional(object({
       cluster_state_name = optional(string, "/vault-enterprise/bootstrap/cluster/state")
       pki_state_name     = optional(string, "/vault-enterprise/bootstrap/pki/state")
+      node_id_name       = optional(string, "/vault-enterprise/bootstrap/node/id")
     }), {})
   })
 

@@ -21,6 +21,16 @@ users:
     shell: /bin/false
 
 write_files:
+  - path: /var/lib/cloud/scripts/bootstrap.env
+    owner: root:root
+    permissions: '0644'
+    encoding: b64
+    content: ${base64encode(bootstrap_env_file)}
+  - path: /var/lib/cloud/scripts/determine-vault-node-role.sh
+    owner: root:root
+    permissions: '0755'
+    encoding: b64
+    content: ${base64encode(determine_vault_node_role_script)}
   - path: /var/lib/cloud/scripts/vault-bootstrap.sh
     owner: root:root
     permissions: '0755'
@@ -28,25 +38,12 @@ write_files:
     content: ${base64encode(vault_bootstrap_script)}
 
 runcmd:
-  - [mkdir, -p, /opt/vault]
-  - [chown, vault:vault, /opt/vault]
-  - [chmod, '755', /opt/vault]
-  - [mkdir, -p, /var/opt/vault]
-  - [chown, vault:vault, /var/opt/vault]
-  - [chmod, '755', /var/opt/vault]
-  - [mkdir, -p, /etc/vault.d]
-  - [chown, root:vault, /etc/vault.d]
-  - [chmod, '755', /etc/vault.d]
-  - [mkdir, -p, /usr/local/libexec/vault]
-  - [chown, root:root, /usr/local/libexec/vault]
-  - [chmod, '755', /usr/local/libexec/vault]
-  - [mkdir, -p, /opt/vault/tls]
-  - [chown, vault:vault, /opt/vault/tls]
-  - [chmod, '755', /opt/vault/tls]
-  - [mkdir, -p, /etc/vault.d/policies]
-  - [chown, vault:vault, /etc/vault.d/policies]
-  - [chmod, '755', /etc/vault.d/policies]
-  - [mkdir, -p, /etc/vault.d/templates]
-  - [chown, vault:vault, /etc/vault.d/templates]
-  - [chmod, '755', /etc/vault.d/templates]
+  - [install, -d, -o, vault, -g, vault, -m, '755', /opt/vault]
+  - [install, -d, -o, vault, -g, vault, -m, '755', /var/opt/vault]
+  - [install, -d, -o, root, -g, vault, -m, '755', /etc/vault.d]
+  - [install, -d, -o, root, -g, root, -m, '755', /usr/local/libexec/vault]
+  - [install, -d, -o, vault, -g, vault, -m, '755', /opt/vault/tls]
+  - [install, -d, -o, vault, -g, vault, -m, '755', /etc/vault.d/policies]
+  - [install, -d, -o, vault, -g, vault, -m, '755', /etc/vault.d/templates]
+  - [/var/lib/cloud/scripts/determine-vault-node-role.sh]
   - [/var/lib/cloud/scripts/vault-bootstrap.sh]

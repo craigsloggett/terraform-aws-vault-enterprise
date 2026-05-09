@@ -116,3 +116,14 @@ resource "aws_ssm_parameter" "bootstrap_pki_state" {
     ignore_changes = [value]
   }
 }
+
+resource "aws_ssm_parameter" "bootstrap_node_id" {
+  name        = var.bootstrap.ssm_parameter.node_id_name
+  type        = "String"
+  value       = "Uninitialized"
+  description = "EC2 instance ID of the elected bootstrap node"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
