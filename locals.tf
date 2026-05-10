@@ -25,11 +25,8 @@ locals {
   vault_fqdn = trimsuffix(aws_route53_record.vault_enterprise.fqdn, ".")
 
   # EBS Configuration
-  ebs_raft_device_name    = "/dev/xvdf"
-  ebs_audit_device_name   = "/dev/xvdg"
-  ebs_baseline_iops       = data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops
-  ebs_baseline_throughput = data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput
-
+  ebs_raft_device_name  = "/dev/xvdf"
+  ebs_audit_device_name = "/dev/xvdg"
 
   # Vault Server Configuration
   config_vault_service          = file("${path.module}/files/vault/vault.service")
