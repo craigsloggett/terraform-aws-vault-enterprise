@@ -290,7 +290,7 @@ variable "bastion" {
 
 variable "compute" {
   type = object({
-    instance_type = optional(string, "m5.large")
+    instance_type = optional(string, "m6a.2xlarge")
     node_count    = optional(number, 5)
 
     root_disk = optional(object({
@@ -301,14 +301,14 @@ variable "compute" {
 
     raft_data_disk = optional(object({
       volume_size = optional(number, 50)
-      iops        = optional(number, 3000)
-      throughput  = optional(number, 125)
+      iops        = optional(number, 12000)
+      throughput  = optional(number, 312)
     }), {})
 
     audit_disk = optional(object({
       volume_size = optional(number, 50)
-      iops        = optional(number, 3000)
-      throughput  = optional(number, 125)
+      iops        = optional(number, 12000)
+      throughput  = optional(number, 312)
     }), {})
 
     auto_join = optional(object({
