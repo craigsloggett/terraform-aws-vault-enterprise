@@ -25,24 +25,11 @@ locals {
   vault_fqdn = trimsuffix(aws_route53_record.vault_enterprise.fqdn, ".")
 
   # EBS Configuration
-  ebs_raft_device_name  = "/dev/xvdf"
-  ebs_audit_device_name = "/dev/xvdg"
+  ebs_raft_device_name    = "/dev/xvdf"
+  ebs_audit_device_name   = "/dev/xvdg"
+  ebs_baseline_iops       = data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops
+  ebs_baseline_throughput = data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput
 
-  # Source: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-optimized.html
-  # bandwidth_mbps is decimal megabits/sec as AWS publishes it.
-  # gp3 throughput is documented in MiB/s.
-  # 1 Mbps = 10^6 / 8 bytes/s; divide by 2^20 for MiB/s.
-  ebs_baseline_raw = {
-    "m5.large"  = { iops = 3600, bandwidth_mbps = 650 }
-    "t3.medium" = { iops = 2000, bandwidth_mbps = 347 }
-  }
-
-  ebs_baseline = {
-    for k, v in local.ebs_baseline_raw : k => {
-      iops       = v.iops
-      throughput = floor(v.bandwidth_mbps * 1000000 / 8 / 1048576)
-    }
-  }
 
   # Vault Server Configuration
   config_vault_service          = file("${path.module}/files/vault/vault.service")

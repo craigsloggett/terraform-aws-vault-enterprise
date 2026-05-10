@@ -290,9 +290,14 @@ variable "bastion" {
 
 variable "compute" {
   type = object({
-    instance_type    = optional(string, "m5.large")
-    node_count       = optional(number, 5)
-    root_volume_size = optional(number, 50)
+    instance_type = optional(string, "m5.large")
+    node_count    = optional(number, 5)
+
+    root_disk = optional(object({
+      volume_size = optional(number, 50)
+      iops        = optional(number, 3000)
+      throughput  = optional(number, 125)
+    }), {})
 
     raft_data_disk = optional(object({
       volume_size = optional(number, 50)
@@ -336,18 +341,38 @@ variable "compute" {
   }
 
   validation {
-    condition     = var.compute.root_volume_size >= 20
-    error_message = "compute.root_volume_size must be at least 20 GiB."
-  }
-
-  validation {
     condition     = length(var.compute.auto_join.tag_value) > 0
     error_message = "compute.auto_join.tag_value must be a non-empty string to prevent accidentally joining an existing cluster."
   }
 
   validation {
-    condition     = var.compute.raft_data_disk.volume_size >= 1 && var.compute.raft_data_disk.volume_size <= 16384
-    error_message = "compute.raft_data_disk.volume_size must be between 1 and 16384 GiB."
+    condition     = var.compute.root_disk.volume_size >= 20 && var.compute.root_disk.volume_size <= 65536
+    error_message = "compute.root_disk.volume_size must be between 20 and 65536 GiB."
+  }
+
+  validation {
+    condition     = var.compute.root_disk.iops >= 3000 && var.compute.root_disk.iops <= 80000
+    error_message = "compute.root_disk.iops must be between 3000 and 80000."
+  }
+
+  validation {
+    condition     = var.compute.root_disk.throughput >= 125 && var.compute.root_disk.throughput <= 2000
+    error_message = "compute.root_disk.throughput must be between 125 and 2000 MiB/s."
+  }
+
+  validation {
+    condition     = var.compute.root_disk.iops <= var.compute.root_disk.volume_size * 500
+    error_message = "compute.root_disk.iops cannot exceed compute.root_disk.volume_size * 500."
+  }
+
+  validation {
+    condition     = var.compute.root_disk.throughput <= var.compute.root_disk.iops * 0.25
+    error_message = "compute.root_disk.throughput cannot exceed compute.root_disk.iops * 0.25."
+  }
+
+  validation {
+    condition     = var.compute.raft_data_disk.volume_size >= 1 && var.compute.raft_data_disk.volume_size <= 65536
+    error_message = "compute.raft_data_disk.volume_size must be between 1 and 65536 GiB."
   }
 
   validation {
@@ -371,8 +396,8 @@ variable "compute" {
   }
 
   validation {
-    condition     = var.compute.audit_disk.volume_size >= 1 && var.compute.audit_disk.volume_size <= 16384
-    error_message = "compute.audit_disk.volume_size must be between 1 and 16384 GiB."
+    condition     = var.compute.audit_disk.volume_size >= 1 && var.compute.audit_disk.volume_size <= 65536
+    error_message = "compute.audit_disk.volume_size must be between 1 and 65536 GiB."
   }
 
   validation {

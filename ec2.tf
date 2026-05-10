@@ -139,7 +139,9 @@ resource "aws_launch_template" "vault_enterprise" {
 
     ebs {
       volume_type           = "gp3"
-      volume_size           = var.compute.root_volume_size
+      volume_size           = var.compute.root_disk.volume_size
+      iops                  = var.compute.root_disk.iops
+      throughput            = var.compute.root_disk.throughput
       encrypted             = true
       delete_on_termination = true
     }
