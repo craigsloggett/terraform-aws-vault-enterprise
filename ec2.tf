@@ -66,6 +66,7 @@ resource "aws_launch_template" "vault_enterprise" {
     # Vault Server Configuration
     config_vault_service          = local.config_vault_service
     config_vault_service_override = local.config_vault_service_override
+    config_vault_hcl              = local.config_vault_hcl
     config_vault_snapshot_json    = local.config_vault_snapshot_json
 
     vault_bootstrap_script = templatefile("${path.module}/templates/vault-bootstrap.sh.tftpl", {
@@ -80,7 +81,6 @@ resource "aws_launch_template" "vault_enterprise" {
       # Vault Server Configuration
       config_vault_admin_policy  = local.config_vault_admin_policy
       config_vault_server_policy = local.config_vault_server_policy
-      config_vault_hcl           = local.config_vault_hcl
 
       # Bootstrap Artifacts
       bootstrap_tls_ca_secret_arn          = aws_secretsmanager_secret.bootstrap_tls_ca.arn

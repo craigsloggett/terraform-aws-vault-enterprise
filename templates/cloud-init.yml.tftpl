@@ -1,3 +1,4 @@
+## template: jinja
 #cloud-config
 timezone: UTC
 ntp:
@@ -43,7 +44,8 @@ write_files:
     owner: root:root
     permissions: '0755'
     content: |
-      ${indent(6, vault_bootstrap_script)}
+      {% raw %}${indent(6, vault_bootstrap_script)}
+      {% endraw %}
   - path: /var/lib/cloud/scripts/configure-autopilot.sh
     owner: root:root
     permissions: '0755'
@@ -54,6 +56,12 @@ write_files:
     permissions: '0755'
     content: |
       ${indent(6, configure_snapshots_script)}
+  - path: /etc/vault.d/vault.hcl
+    owner: vault:vault
+    permissions: '0640'
+    defer: true
+    content: |
+      ${indent(6, config_vault_hcl)}
   - path: /etc/vault.d/snapshot.json
     owner: vault:vault
     permissions: '0640'

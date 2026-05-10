@@ -34,7 +34,6 @@ readonly VAULT_POLICY_DIR="$${VAULT_CONFIG_DIR}/policies"
 
 # Vault File Paths
 readonly VAULT_LICENSE_FILE="$${VAULT_HOME_DIR}/vault.hclic"
-readonly VAULT_CONFIG_FILE="$${VAULT_CONFIG_DIR}/vault.hcl"
 readonly VAULT_AUDIT_LOG_FILE="$${VAULT_LOG_DIR}/vault_audit.log"
 readonly VAULT_TLS_CA_FILE="$${VAULT_TLS_DIR}/ca.crt"
 readonly VAULT_TLS_CERT_FILE="$${VAULT_TLS_DIR}/server.crt"
@@ -128,16 +127,8 @@ get_imds_metadata() (
     "http://169.254.169.254/latest/meta-data/$${path}"
 )
 
-get_private_ip() (
-  get_imds_metadata "local-ipv4"
-)
-
 get_instance_id() (
   get_imds_metadata "instance-id"
-)
-
-get_availability_zone() (
-  get_imds_metadata "placement/availability-zone"
 )
 
 #######################################
@@ -564,21 +555,6 @@ write_vault_license() (
   printf '%s\n' "$${vault_license}" >"$${VAULT_LICENSE_FILE}"
   chown vault:vault "$${VAULT_LICENSE_FILE}"
   chmod 0640 "$${VAULT_LICENSE_FILE}"
-)
-
-write_vault_config() (
-  private_ip="$(get_private_ip)"
-  instance_id="$(get_instance_id)"
-  availability_zone="$(get_availability_zone)"
-
-  log_info "Writing Vault configuration (bind=$${private_ip})"
-
-  cat >"$${VAULT_CONFIG_FILE}" <<EOF
-${config_vault_hcl}
-EOF
-
-  chown vault:vault "$${VAULT_CONFIG_FILE}"
-  chmod 0640 "$${VAULT_CONFIG_FILE}"
 )
 
 #######################################
@@ -1050,7 +1026,6 @@ main() {
 
   # Render Bootstrap Artifacts
   write_vault_license
-  write_vault_config
   write_vault_bootstrap_tls_materials
 
   # Identify Bootstrap Node
