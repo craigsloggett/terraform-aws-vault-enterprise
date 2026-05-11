@@ -13,6 +13,10 @@ log_warn() (
   printf '[WARN]  %s\n' "${1}" >&2
 )
 
+log_error() (
+  printf '[ERROR] %s\n' "${1}" >&2
+)
+
 fetch_parameter() (
   aws ssm get-parameter \
     --name "${1}" \
@@ -27,6 +31,21 @@ put_parameter() (
     --type String \
     --overwrite \
     >/dev/null
+)
+
+fetch_secret() (
+  for attempt in 1 2 3 4 5; do
+    if result="$(aws secretsmanager get-secret-value \
+      --secret-id "${1}" \
+      --query SecretString --output text 2>/dev/null)"; then
+      printf '%s' "${result}"
+      return 0
+    fi
+    sleep 5
+  done
+
+  log_error "Failed to retrieve secret after ${attempt} attempts"
+  return 1
 )
 
 put_secret() (
