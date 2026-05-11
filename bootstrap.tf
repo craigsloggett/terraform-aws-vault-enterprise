@@ -61,38 +61,6 @@ resource "tls_locally_signed_cert" "bootstrap_tls_cert" {
   ]
 }
 
-# Secrets Manager
-
-resource "aws_secretsmanager_secret" "bootstrap_tls_ca" {
-  name_prefix = var.bootstrap.secretsmanager_secret.tls_ca_name_prefix
-  description = "Vault Enterprise Bootstrap TLS CA"
-}
-
-resource "aws_secretsmanager_secret_version" "bootstrap_tls_ca" {
-  secret_id     = aws_secretsmanager_secret.bootstrap_tls_ca.id
-  secret_string = tls_self_signed_cert.bootstrap_tls_ca.cert_pem
-}
-
-resource "aws_secretsmanager_secret" "bootstrap_tls_cert" {
-  name_prefix = var.bootstrap.secretsmanager_secret.tls_cert_name_prefix
-  description = "Vault Enterprise Bootstrap TLS Certificate"
-}
-
-resource "aws_secretsmanager_secret_version" "bootstrap_tls_cert" {
-  secret_id     = aws_secretsmanager_secret.bootstrap_tls_cert.id
-  secret_string = tls_locally_signed_cert.bootstrap_tls_cert.cert_pem
-}
-
-resource "aws_secretsmanager_secret" "bootstrap_tls_private_key" {
-  name_prefix = var.bootstrap.secretsmanager_secret.tls_private_key_name_prefix
-  description = "Vault Enterprise Bootstrap TLS Private Key"
-}
-
-resource "aws_secretsmanager_secret_version" "bootstrap_tls_private_key" {
-  secret_id     = aws_secretsmanager_secret.bootstrap_tls_private_key.id
-  secret_string = tls_private_key.bootstrap_tls_private_key.private_key_pem
-}
-
 # Initialization Coordination SSM Parameters
 
 resource "aws_ssm_parameter" "bootstrap_cluster_state" {
@@ -111,6 +79,17 @@ resource "aws_ssm_parameter" "bootstrap_pki_state" {
   type        = "String"
   value       = "Uninitialized"
   description = "Bootstrap PKI State Flag"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "bootstrap_node_id" {
+  name        = var.bootstrap.ssm_parameter.node_id_name
+  type        = "String"
+  value       = "Uninitialized"
+  description = "EC2 instance ID of the elected bootstrap node"
 
   lifecycle {
     ignore_changes = [value]

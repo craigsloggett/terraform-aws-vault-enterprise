@@ -65,9 +65,6 @@ data "aws_iam_policy_document" "secrets_manager_read" {
     actions = ["secretsmanager:GetSecretValue"]
 
     resources = [
-      aws_secretsmanager_secret.bootstrap_tls_ca.arn,
-      aws_secretsmanager_secret.bootstrap_tls_cert.arn,
-      aws_secretsmanager_secret.bootstrap_tls_private_key.arn,
       aws_secretsmanager_secret.license.arn,
       aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
     ]
@@ -182,6 +179,7 @@ data "aws_iam_policy_document" "ssm_read_write" {
     resources = [
       aws_ssm_parameter.bootstrap_cluster_state.arn,
       aws_ssm_parameter.bootstrap_pki_state.arn,
+      aws_ssm_parameter.bootstrap_node_id.arn,
       aws_ssm_parameter.vault_pki_intermediate_ca.arn,
       aws_ssm_parameter.vault_pki_intermediate_ca_csr.arn,
     ]

@@ -20,3 +20,7 @@ data "aws_ami" "selected" {
     values = [var.ami.name]
   }
 }
+
+data "aws_ec2_instance_type" "compute" {
+  instance_type = var.compute.instance_type
+}

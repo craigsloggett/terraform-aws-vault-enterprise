@@ -17,6 +17,10 @@ resource "aws_instance" "bastion" {
   tags = {
     Name = var.bastion.name
   }
+
+  volume_tags = {
+    Name = var.bastion.volume_name
+  }
 }
 
 # Vault Nodes
@@ -43,79 +47,143 @@ resource "aws_launch_template" "vault_enterprise" {
     http_put_response_hop_limit = 1
   }
 
-  user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.sh.tftpl", {
-    # Environment Configuration
-    vault_fqdn         = local.vault_fqdn
-    vault_version      = var.vault.version
-    license_secret_arn = aws_secretsmanager_secret.license.arn
+  user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.yml.tftpl", {
+    bootstrap_env_file = templatefile("${path.module}/templates/bootstrap.env.tftpl", {
+      # Environment
+      vault_fqdn    = local.vault_fqdn
+      vault_version = var.vault.version
 
-    # EBS Configuration
-    ebs_raft_device_name  = local.ebs_raft_device_name
-    ebs_audit_device_name = local.ebs_audit_device_name
+      # Auto-join Discovery
+      auto_join_tag_key   = var.compute.auto_join.tag_key
+      auto_join_tag_value = var.compute.auto_join.tag_value
+
+      # Bootstrap Coordination
+      bootstrap_cluster_state_name = aws_ssm_parameter.bootstrap_cluster_state.name
+      bootstrap_node_id_name       = aws_ssm_parameter.bootstrap_node_id.name
+      bootstrap_pki_state_name     = aws_ssm_parameter.bootstrap_pki_state.name
+
+      # Bootstrap Secrets
+      license_secret_arn       = aws_secretsmanager_secret.license.arn
+      recovery_keys_secret_arn = aws_secretsmanager_secret.recovery_keys.arn
+      root_token_secret_arn    = aws_secretsmanager_secret.root_token.arn
+
+      # EBS Storage
+      ebs_audit_device_name = "/dev/xvdg"
+      ebs_raft_device_name  = "/dev/xvdf"
+
+      # Vault Autopilot
+      vault_autopilot_cleanup_dead_servers               = var.vault_autopilot.cleanup_dead_servers
+      vault_autopilot_dead_server_last_contact_threshold = var.vault_autopilot.dead_server_last_contact_threshold
+      vault_autopilot_min_quorum                         = max(3, floor(var.compute.node_count / 2) + 1)
+
+      # Vault AWS Auth
+      vault_aws_auth_role_max_ttl = var.vault_auth.aws.role_max_ttl
+      vault_aws_auth_role_ttl     = var.vault_auth.aws.role_ttl
+      vault_iam_role_arn          = aws_iam_role.vault_enterprise.arn
+
+      # Vault HCP Terraform JWT Auth
+      vault_auth_jwt_hcp_terraform_hostname              = var.vault_auth_jwt_hcp_terraform.hostname
+      vault_auth_jwt_hcp_terraform_mount_path            = var.vault_auth_jwt_hcp_terraform.mount_path
+      vault_auth_jwt_hcp_terraform_oidc_discovery_ca_pem = var.vault_auth_jwt_hcp_terraform.oidc_discovery_ca_pem
+      vault_auth_jwt_hcp_terraform_organization_name     = var.vault_auth_jwt_hcp_terraform.organization_name
+      vault_auth_jwt_hcp_terraform_role_name             = var.vault_auth_jwt_hcp_terraform.role_name
+      vault_auth_jwt_hcp_terraform_workspace_id          = var.vault_auth_jwt_hcp_terraform.workspace_id
+      vault_auth_jwt_role_max_ttl                        = var.vault_auth.jwt.role_max_ttl
+      vault_auth_jwt_role_ttl                            = var.vault_auth.jwt.role_ttl
+
+      # Vault PKI
+      vault_pki_intermediate_ca_common_name               = var.vault_pki.intermediate_ca.common_name
+      vault_pki_intermediate_ca_country                   = var.vault_pki.intermediate_ca.country
+      vault_pki_intermediate_ca_csr_ssm_parameter_name    = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
+      vault_pki_intermediate_ca_key_bits                  = var.vault_pki.intermediate_ca.key_bits
+      vault_pki_intermediate_ca_key_type                  = var.vault_pki.intermediate_ca.key_type
+      vault_pki_intermediate_ca_organization              = var.vault_pki.intermediate_ca.organization
+      vault_pki_intermediate_ca_ssm_parameter_name        = aws_ssm_parameter.vault_pki_intermediate_ca.name
+      vault_pki_mount_path                                = var.vault_pki.mount_path
+      vault_pki_server_cert_ttl                           = var.vault_pki.server_cert_ttl
+      vault_pki_signed_intermediate_ca_secret_arn         = aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
+      vault_pki_signed_intermediate_poll_interval_seconds = var.vault_pki.signed_intermediate_poll_interval_seconds
+      vault_pki_signed_intermediate_wait_timeout_seconds  = var.vault_pki.signed_intermediate_wait_timeout_seconds
+      vault_pki_vault_mount_max_ttl                       = var.vault_pki.mount_max_ttl
+      vault_pki_vault_server_role_max_ttl                 = var.vault_pki.server_role_max_ttl
+    })
+
+    # Bootstrap Scripts
+    script_common_functions                    = file("${path.module}/files/bootstrap/common-functions.sh")
+    script_determine_vault_node_role           = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
+    script_install_vault                       = file("${path.module}/files/bootstrap/install-vault.sh")
+    script_write_vault_license                 = file("${path.module}/files/bootstrap/write-vault-license.sh")
+    script_write_vault_bootstrap_tls_materials = file("${path.module}/files/bootstrap/write-vault-bootstrap-tls-materials.sh")
+    script_prepare_vault_storage               = file("${path.module}/files/bootstrap/prepare-vault-storage.sh")
+    script_start_vault                         = file("${path.module}/files/bootstrap/start-vault.sh")
+    script_initialize_vault_cluster            = file("${path.module}/files/bootstrap/initialize-vault-cluster.sh")
+    script_wait_for_vault_cluster              = file("${path.module}/files/bootstrap/wait-for-vault-cluster.sh")
+    script_configure_vault_audit               = file("${path.module}/files/bootstrap/configure-vault-audit.sh")
+    script_configure_snapshots                 = file("${path.module}/files/bootstrap/configure-snapshots.sh")
+    script_configure_autopilot                 = file("${path.module}/files/bootstrap/configure-autopilot.sh")
+    script_configure_vault_aws_auth            = file("${path.module}/files/bootstrap/configure-vault-aws-auth.sh")
+    script_configure_vault_jwt_auth            = file("${path.module}/files/bootstrap/configure-vault-jwt-auth.sh")
+    script_configure_vault_pki                 = file("${path.module}/files/bootstrap/configure-vault-pki.sh")
+    script_issue_vault_tls_cert                = file("${path.module}/files/bootstrap/issue-vault-tls-cert.sh")
+
+    # Bootstrap TLS Materials
+    bootstrap_tls_ca_pem          = tls_self_signed_cert.bootstrap_tls_ca.cert_pem
+    bootstrap_tls_cert_pem        = tls_locally_signed_cert.bootstrap_tls_cert.cert_pem
+    bootstrap_tls_private_key_pem = tls_private_key.bootstrap_tls_private_key.private_key_pem
 
     # Vault Server Configuration
-    config_vault_service          = local.config_vault_service
-    config_vault_service_override = local.config_vault_service_override
-    config_vault_admin_policy     = local.config_vault_admin_policy
-    config_vault_server_policy    = local.config_vault_server_policy
-    config_vault_hcl              = local.config_vault_hcl
-    config_vault_snapshot_json    = local.config_vault_snapshot_json
+    config_vault_cli = templatefile("${path.module}/templates/vault/cli-config.sh.tftpl", {
+      vault_fqdn = local.vault_fqdn
+    })
 
-    # Bootstrap Artifacts
-    bootstrap_tls_ca_secret_arn          = aws_secretsmanager_secret.bootstrap_tls_ca.arn
-    bootstrap_tls_cert_secret_arn        = aws_secretsmanager_secret.bootstrap_tls_cert.arn
-    bootstrap_tls_private_key_secret_arn = aws_secretsmanager_secret.bootstrap_tls_private_key.arn
+    config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
+      ui                        = var.vault.ui
+      disable_mlock             = var.vault.disable_mlock
+      cluster_name              = var.vault.cluster_name
+      log_level                 = var.vault.log_level
+      log_format                = var.vault.log_format
+      tls_min_version           = var.vault.listener_tcp.tls_min_version
+      prometheus_retention_time = var.vault.telemetry.prometheus_retention_time
+      disable_hostname          = var.vault.telemetry.disable_hostname
+      vault_fqdn                = local.vault_fqdn
+      aws_region                = data.aws_region.current.region
+      kms_key_alias             = aws_kms_alias.auto_unseal.name
+      auto_join_tag_key         = var.compute.auto_join.tag_key
+      auto_join_tag_value       = var.compute.auto_join.tag_value
+    })
 
-    # Bootstrap Coordination Configuration
-    auto_join_tag_key            = var.compute.auto_join.tag_key
-    auto_join_tag_value          = var.compute.auto_join.tag_value
-    bootstrap_cluster_state_name = aws_ssm_parameter.bootstrap_cluster_state.name
-    bootstrap_pki_state_name     = aws_ssm_parameter.bootstrap_pki_state.name
-    root_token_secret_arn        = aws_secretsmanager_secret.root_token.arn
-    recovery_keys_secret_arn     = aws_secretsmanager_secret.recovery_keys.arn
+    config_vault_snapshot_json = templatefile("${path.module}/templates/vault/snapshot.json.tftpl", {
+      aws_s3_bucket = aws_s3_bucket.snapshots.id
+      aws_s3_region = data.aws_region.current.region
+      path_prefix   = var.vault_snapshot.path_prefix
+      file_prefix   = var.vault_snapshot.file_prefix
+      interval      = var.vault_snapshot.interval
+      retain        = var.vault_snapshot.retain
+    })
 
-    # Autopilot Configuration
-    vault_autopilot_cleanup_dead_servers               = var.vault_autopilot.cleanup_dead_servers
-    vault_autopilot_dead_server_last_contact_threshold = var.vault_autopilot.dead_server_last_contact_threshold
-    vault_autopilot_min_quorum                         = max(3, floor(var.compute.node_count / 2) + 1)
+    config_vault_admin_policy = file("${path.module}/files/policies/admin.hcl")
 
-    # PKI and TLS Configuration
-    vault_pki_intermediate_ca_common_name               = var.vault_pki.intermediate_ca.common_name
-    vault_pki_intermediate_ca_country                   = var.vault_pki.intermediate_ca.country
-    vault_pki_intermediate_ca_organization              = var.vault_pki.intermediate_ca.organization
-    vault_pki_intermediate_ca_key_type                  = var.vault_pki.intermediate_ca.key_type
-    vault_pki_intermediate_ca_key_bits                  = var.vault_pki.intermediate_ca.key_bits
-    vault_pki_signed_intermediate_poll_interval_seconds = var.vault_pki.signed_intermediate_poll_interval_seconds
-    vault_pki_signed_intermediate_wait_timeout_seconds  = var.vault_pki.signed_intermediate_wait_timeout_seconds
-    vault_pki_intermediate_ca_ssm_parameter_name        = aws_ssm_parameter.vault_pki_intermediate_ca.name
-    vault_pki_intermediate_ca_csr_ssm_parameter_name    = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
-    vault_pki_signed_intermediate_ca_secret_arn         = aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
-    vault_pki_vault_mount_max_ttl                       = var.vault_pki.mount_max_ttl
-    vault_pki_vault_server_role_max_ttl                 = var.vault_pki.server_role_max_ttl
-    vault_pki_server_cert_ttl                           = var.vault_pki.server_cert_ttl
-    vault_pki_mount_path                                = var.vault_pki.mount_path
+    config_vault_server_policy = templatefile("${path.module}/templates/policies/vault-server.hcl.tftpl", {
+      vault_pki_mount_path = var.vault_pki.mount_path
+    })
 
-    # AWS Auth Configuration
-    vault_iam_role_arn          = aws_iam_role.vault_enterprise.arn
-    vault_aws_auth_role_max_ttl = var.vault_auth.aws.role_max_ttl
-    vault_aws_auth_role_ttl     = var.vault_auth.aws.role_ttl
-
-    # HCP Terraform JWT Auth Configuration
-    vault_auth_jwt_role_max_ttl                        = var.vault_auth.jwt.role_max_ttl
-    vault_auth_jwt_role_ttl                            = var.vault_auth.jwt.role_ttl
-    vault_auth_jwt_hcp_terraform_hostname              = var.vault_auth_jwt_hcp_terraform.hostname
-    vault_auth_jwt_hcp_terraform_organization_name     = var.vault_auth_jwt_hcp_terraform.organization_name
-    vault_auth_jwt_hcp_terraform_workspace_id          = var.vault_auth_jwt_hcp_terraform.workspace_id
-    vault_auth_jwt_hcp_terraform_oidc_discovery_ca_pem = var.vault_auth_jwt_hcp_terraform.oidc_discovery_ca_pem
-    vault_auth_jwt_hcp_terraform_mount_path            = var.vault_auth_jwt_hcp_terraform.mount_path
-    vault_auth_jwt_hcp_terraform_role_name             = var.vault_auth_jwt_hcp_terraform.role_name
+    config_vault_service          = file("${path.module}/files/vault/vault.service")
+    config_vault_service_override = file("${path.module}/files/vault/vault.service.override.conf")
 
     # Vault Agent Configuration
-    config_vault_agent_hcl                     = local.config_vault_agent_hcl
-    config_vault_agent_server_tls_ctmpl        = local.config_vault_agent_server_tls_ctmpl
-    config_vault_agent_reload_vault_server_tls = local.config_vault_agent_reload_vault_server_tls
-    config_vault_agent_reload_rules            = local.config_vault_agent_reload_rules
-    config_vault_agent_service                 = local.config_vault_agent_service
+    config_vault_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
+      vault_fqdn = local.vault_fqdn
+    })
+
+    config_vault_agent_server_tls_ctmpl = templatefile("${path.module}/templates/agent/vault-server-tls.ctmpl.tftpl", {
+      vault_fqdn                = local.vault_fqdn
+      vault_pki_mount_path      = var.vault_pki.mount_path
+      vault_pki_server_cert_ttl = var.vault_pki.server_cert_ttl
+    })
+
+    config_vault_agent_service                 = file("${path.module}/files/agent/vault-agent.service")
+    config_vault_agent_reload_rules            = file("${path.module}/files/agent/vault-agent-reload.rules")
+    config_vault_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
   }))
 
   block_device_mappings {
@@ -123,7 +191,9 @@ resource "aws_launch_template" "vault_enterprise" {
 
     ebs {
       volume_type           = "gp3"
-      volume_size           = var.compute.root_volume_size
+      volume_size           = var.compute.root_disk.volume_size
+      iops                  = var.compute.root_disk.iops
+      throughput            = var.compute.root_disk.throughput
       encrypted             = true
       delete_on_termination = true
     }
