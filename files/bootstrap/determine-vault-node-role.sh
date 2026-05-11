@@ -16,18 +16,6 @@ log_error() (
   printf '[ERROR] %s\n' "${1}" >&2
 )
 
-get_imds_token() (
-  curl -s -X PUT \
-    -H "X-aws-ec2-metadata-token-ttl-seconds: 3600" \
-    "http://169.254.169.254/latest/api/token"
-)
-
-get_instance_id() (
-  token="$(get_imds_token)"
-  curl -s -H "X-aws-ec2-metadata-token: ${token}" \
-    "http://169.254.169.254/latest/meta-data/instance-id"
-)
-
 list_cluster_instance_ids() (
   for attempt in 1 2 3 4 5; do
     if result="$(
@@ -49,11 +37,10 @@ list_cluster_instance_ids() (
 )
 
 is_lowest_id_node() (
-  instance_id="$(get_instance_id)"
   all_ids="$(list_cluster_instance_ids)"
   lowest_id="$(printf '%s' "${all_ids}" | tr '\t' '\n' | sort | head -1)"
 
-  [ "${instance_id}" = "${lowest_id}" ]
+  [ "${INSTANCE_ID}" = "${lowest_id}" ]
 )
 
 wait_for_bootstrap_election() (
@@ -88,9 +75,8 @@ main() {
   fi
 
   if is_lowest_id_node; then
-    instance_id="$(get_instance_id)"
-    log_info "This node (${instance_id}) won bootstrap election, publishing to SSM"
-    put_parameter "${BOOTSTRAP_NODE_ID_NAME}" "${instance_id}"
+    log_info "This node (${INSTANCE_ID}) won bootstrap election, publishing to SSM"
+    put_parameter "${BOOTSTRAP_NODE_ID_NAME}" "${INSTANCE_ID}"
   else
     wait_for_bootstrap_election
   fi
