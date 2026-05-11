@@ -348,16 +348,6 @@ configure_vault_mount_directories() (
   chmod 755 "$${VAULT_LOG_DIR}"
 )
 
-write_vault_shell_env() (
-  log_info "Writing Vault CLI environment to /etc/profile.d/99-vault-cli-config.sh"
-
-  cat >/etc/profile.d/99-vault-cli-config.sh <<EOF
-export VAULT_ADDR="https://127.0.0.1:8200"
-export VAULT_TLS_SERVER_NAME="$${VAULT_FQDN}"
-export VAULT_CACERT="$${VAULT_TLS_CA_FILE}"
-EOF
-)
-
 #######################################
 #       Configure Vault Cluster       #
 #######################################
@@ -742,17 +732,6 @@ bind_admin_jwt_role() (
 EOF
 )
 
-#######################################
-#  Install and Configure Vault Agent  #
-#######################################
-
-start_vault_agent() (
-  log_info "Starting Vault Agent"
-
-  systemctl daemon-reload
-  systemctl enable --now vault-agent
-)
-
 main() {
   # Verify AMI-provided utilities are available.
   verify_prerequisites
@@ -814,10 +793,6 @@ main() {
   issue_vault_pki_tls_certificate_and_key
   reload_vault_listener
   write_vault_pki_ca_bundle
-
-  # Enable Vault Agent TLS Rotation
-  write_vault_shell_env
-  start_vault_agent
 
   log_info "=== Bootstrap complete ==="
 }

@@ -71,6 +71,7 @@ resource "aws_launch_template" "vault_enterprise" {
     ensure_vault_cluster_script                = file("${path.module}/files/bootstrap/ensure-vault-cluster.sh")
     configure_autopilot_script                 = file("${path.module}/files/bootstrap/configure-autopilot.sh")
     configure_snapshots_script                 = file("${path.module}/files/bootstrap/configure-snapshots.sh")
+    start_vault_agent_script                   = file("${path.module}/files/bootstrap/start-vault-agent.sh")
 
     # Bootstrap TLS Materials
     bootstrap_tls_ca_pem          = tls_self_signed_cert.bootstrap_tls_ca.cert_pem
@@ -82,6 +83,7 @@ resource "aws_launch_template" "vault_enterprise" {
     config_vault_service_override = file("${path.module}/files/vault/vault.service.override.conf")
     config_vault_hcl              = local.config_vault_hcl
     config_vault_snapshot_json    = local.config_vault_snapshot_json
+    config_vault_cli              = local.config_vault_cli
 
     # Vault Agent Configuration
     config_vault_agent_hcl                     = local.config_vault_agent_hcl

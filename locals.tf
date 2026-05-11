@@ -58,6 +58,10 @@ locals {
     retain        = var.vault_snapshot.retain
   })
 
+  config_vault_cli = templatefile("${path.module}/templates/vault/cli-config.sh.tftpl", {
+    vault_fqdn = local.vault_fqdn
+  })
+
   # Vault Agent Configuration
   config_vault_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
     vault_fqdn = local.vault_fqdn
