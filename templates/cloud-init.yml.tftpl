@@ -85,6 +85,11 @@ write_files:
     permissions: '0755'
     content: |
       ${indent(6, configure_vault_pki_script)}
+  - path: /var/lib/cloud/scripts/issue-vault-tls-cert.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      ${indent(6, issue_vault_tls_cert_script)}
   - path: /var/lib/cloud/scripts/vault-bootstrap.sh
     owner: root:root
     permissions: '0755'

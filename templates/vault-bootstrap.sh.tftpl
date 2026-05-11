@@ -16,34 +16,14 @@
 
 set -euf
 
-# Session-scoped temporary directory.
-TMPDIR_SESSION="$(mktemp -d)" || exit 1
-readonly TMPDIR_SESSION
-trap 'rm -rf "$${TMPDIR_SESSION}"' EXIT INT TERM HUP
-
 # Vault Directories
-readonly VAULT_HOME_DIR="/opt/vault"
 readonly VAULT_DATA_DIR="/var/opt/vault"
 readonly VAULT_LOG_DIR="/var/log/vault"
-readonly VAULT_TLS_DIR="$${VAULT_HOME_DIR}/tls"
 readonly VAULT_RAFT_DIR="$${VAULT_DATA_DIR}/data"
-
-# Vault File Paths
-readonly VAULT_TLS_CA_FILE="$${VAULT_TLS_DIR}/ca.crt"
-readonly VAULT_TLS_CERT_FILE="$${VAULT_TLS_DIR}/server.crt"
-readonly VAULT_TLS_KEY_FILE="$${VAULT_TLS_DIR}/server.key"
-
-# Environment
-readonly VAULT_FQDN="${vault_fqdn}"
 
 # EBS Volumes
 readonly EBS_RAFT_DEVICE_NAME="${ebs_raft_device_name}"
 readonly EBS_AUDIT_DEVICE_NAME="${ebs_audit_device_name}"
-
-# PKI and TLS
-readonly VAULT_PKI_MOUNT_PATH="${vault_pki_mount_path}"
-readonly VAULT_PKI_SERVER_CERT_TTL="${vault_pki_server_cert_ttl}"
-readonly VAULT_PKI_INTERMEDIATE_CA_SSM_PARAMETER_NAME="${vault_pki_intermediate_ca_ssm_parameter_name}"
 
 #######################################
 #           Logging Helpers           #
@@ -59,19 +39,6 @@ log_warn() (
 
 log_error() (
   printf '[ERROR] %s\n' "$${1}" >&2
-)
-
-#######################################
-#   AWS SSM Parameter Store Helpers   #
-#######################################
-
-fetch_parameter() (
-  parameter_name="$${1}"
-
-  aws ssm get-parameter \
-    --name "$${parameter_name}" \
-    --query "Parameter.Value" \
-    --output text
 )
 
 #######################################
@@ -189,10 +156,6 @@ wait_for_network() (
   return 1
 )
 
-#######################################
-# Install and Configure Vault Server  #
-#######################################
-
 configure_vault_mount_directories() (
   # Mount-point ownership must be set after prepare_disk overlays the volume,
   # otherwise the settings apply to the underlying directory and are hidden
@@ -206,101 +169,9 @@ configure_vault_mount_directories() (
   chmod 755 "$${VAULT_LOG_DIR}"
 )
 
-#######################################
-#       Configure Vault Cluster       #
-#######################################
-
-write_vault_pki_ca_bundle() (
-  cluster_tls_ca_bundle="$(fetch_tls_ca_bundle)"
-
-  log_info "Replacing bootstrap CA cert with PKI managed TLS CA bundle"
-
-  printf '%s\n' "$${cluster_tls_ca_bundle}" >"$${VAULT_TLS_CA_FILE}"
-  chown vault:vault "$${VAULT_TLS_CA_FILE}"
-  chmod 0644 "$${VAULT_TLS_CA_FILE}"
-
-  temporary_cluster_ca_file="$${VAULT_TLS_DIR}/pki-ca.crt"
-  if [ -f "$${temporary_cluster_ca_file}" ]; then
-    rm -f "$${temporary_cluster_ca_file}"
-    log_info "Removed temporary PKI CA cert file $${temporary_cluster_ca_file}"
-  fi
-)
-
-issue_vault_pki_tls_certificate_and_key() (
-  log_info "Issuing PKI TLS certificate and private key for this node"
-
-  # Follower nodes need to fetch the new CA bundle from SSM and authenticate
-  # via the AWS IAM auth method.
-  if [ -z "$${VAULT_TOKEN:-}" ]; then
-    new_ca_cert="$(fetch_tls_ca_bundle)"
-
-    # Keep the bootstrap CA at VAULT_CACERT until the listener reloads. This
-    # temporary file is only for follower-node AWS auth and later cleanup.
-    new_ca_cert_file="$${VAULT_TLS_DIR}/pki-ca.crt"
-    printf '%s\n' "$${new_ca_cert}" >"$${new_ca_cert_file}"
-    chown vault:vault "$${new_ca_cert_file}"
-    chmod 0644 "$${new_ca_cert_file}"
-
-    log_info "Authenticating via AWS IAM auth method"
-    vault_token="$(
-      vault login \
-        -format=json \
-        -method=aws \
-        role=vault-server |
-        jq -r '.auth.client_token'
-    )"
-    export VAULT_TOKEN="$${vault_token}"
-  fi
-
-  log_info "Requesting certificate from PKI engine"
-  cert_json="$(
-    vault write -format=json "$${VAULT_PKI_MOUNT_PATH}/issue/vault-server" - <<EOF
-{
-  "common_name": "$${VAULT_FQDN}",
-  "ttl": "$${VAULT_PKI_SERVER_CERT_TTL}"
-}
-EOF
-  )"
-
-  tmp_cert="$${VAULT_TLS_DIR}/server.crt.tmp"
-  tmp_key="$${VAULT_TLS_DIR}/server.key.tmp"
-
-  {
-    printf '%s' "$${cert_json}" | jq -r '.data.certificate'
-    printf '%s' "$${cert_json}" | jq -r '.data.ca_chain[]'
-  } >"$${tmp_cert}"
-  printf '%s' "$${cert_json}" | jq -r '.data.private_key' >"$${tmp_key}"
-
-  chown vault:vault "$${tmp_cert}" "$${tmp_key}"
-  chmod 0640 "$${tmp_cert}" "$${tmp_key}"
-
-  mv "$${tmp_cert}" "$${VAULT_TLS_CERT_FILE}"
-  mv "$${tmp_key}" "$${VAULT_TLS_KEY_FILE}"
-
-  log_info "PKI TLS certificate written to $${VAULT_TLS_CERT_FILE}"
-  log_info "PKI TLS private key written to $${VAULT_TLS_KEY_FILE}"
-)
-
-reload_vault_listener() (
-  log_info "Reloading Vault TLS listener with PKI-signed certificate"
-
-  systemctl kill --signal=SIGHUP --kill-whom=main vault.service
-
-  log_info "Vault TLS listener reloaded"
-)
-
-fetch_tls_ca_bundle() (
-  fetch_parameter "$${VAULT_PKI_INTERMEDIATE_CA_SSM_PARAMETER_NAME}"
-)
-
 main() {
   # Verify AMI-provided utilities are available.
   verify_prerequisites
-
-  # Export Vault CLI environment variables early.
-  export VAULT_ADDR="https://127.0.0.1:8200"
-  export VAULT_TLS_SERVER_NAME="$${VAULT_FQDN}"
-  export VAULT_CACERT="$${VAULT_TLS_CA_FILE}"
 
   # Prepare System
   wait_for_network
@@ -328,9 +199,7 @@ main() {
 
   /var/lib/cloud/scripts/configure-vault-pki.sh
 
-  issue_vault_pki_tls_certificate_and_key
-  reload_vault_listener
-  write_vault_pki_ca_bundle
+  /var/lib/cloud/scripts/issue-vault-tls-cert.sh
 
   log_info "=== Bootstrap complete ==="
 }

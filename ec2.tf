@@ -76,6 +76,7 @@ resource "aws_launch_template" "vault_enterprise" {
       vault_pki_intermediate_ca_organization              = var.vault_pki.intermediate_ca.organization
       vault_pki_intermediate_ca_ssm_parameter_name        = aws_ssm_parameter.vault_pki_intermediate_ca.name
       vault_pki_mount_path                                = var.vault_pki.mount_path
+      vault_pki_server_cert_ttl                           = var.vault_pki.server_cert_ttl
       vault_pki_signed_intermediate_ca_secret_arn         = aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
       vault_pki_signed_intermediate_poll_interval_seconds = var.vault_pki.signed_intermediate_poll_interval_seconds
       vault_pki_signed_intermediate_wait_timeout_seconds  = var.vault_pki.signed_intermediate_wait_timeout_seconds
@@ -96,6 +97,7 @@ resource "aws_launch_template" "vault_enterprise" {
     configure_vault_aws_auth_script            = file("${path.module}/files/bootstrap/configure-vault-aws-auth.sh")
     configure_vault_jwt_auth_script            = file("${path.module}/files/bootstrap/configure-vault-jwt-auth.sh")
     configure_vault_pki_script                 = file("${path.module}/files/bootstrap/configure-vault-pki.sh")
+    issue_vault_tls_cert_script                = file("${path.module}/files/bootstrap/issue-vault-tls-cert.sh")
     configure_autopilot_script                 = file("${path.module}/files/bootstrap/configure-autopilot.sh")
     configure_snapshots_script                 = file("${path.module}/files/bootstrap/configure-snapshots.sh")
 
@@ -121,12 +123,8 @@ resource "aws_launch_template" "vault_enterprise" {
     config_vault_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
 
     vault_bootstrap_script = templatefile("${path.module}/templates/vault-bootstrap.sh.tftpl", {
-      vault_fqdn                                   = local.vault_fqdn
-      ebs_raft_device_name                         = local.ebs_raft_device_name
-      ebs_audit_device_name                        = local.ebs_audit_device_name
-      vault_pki_intermediate_ca_ssm_parameter_name = aws_ssm_parameter.vault_pki_intermediate_ca.name
-      vault_pki_mount_path                         = var.vault_pki.mount_path
-      vault_pki_server_cert_ttl                    = var.vault_pki.server_cert_ttl
+      ebs_raft_device_name  = local.ebs_raft_device_name
+      ebs_audit_device_name = local.ebs_audit_device_name
     })
   }))
 
