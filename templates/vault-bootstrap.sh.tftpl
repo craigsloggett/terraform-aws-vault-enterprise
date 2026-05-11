@@ -61,7 +61,6 @@ readonly BOOTSTRAP_CLUSTER_STATE_NAME="${bootstrap_cluster_state_name}"
 readonly BOOTSTRAP_PKI_STATE_NAME="${bootstrap_pki_state_name}"
 readonly BOOTSTRAP_NODE_ID_NAME="${bootstrap_node_id_name}"
 readonly ROOT_TOKEN_SECRET_ARN="${root_token_secret_arn}"
-readonly RECOVERY_KEYS_SECRET_ARN="${recovery_keys_secret_arn}"
 
 # PKI and TLS
 readonly VAULT_PKI_MOUNT_PATH="${vault_pki_mount_path}"
@@ -273,62 +272,6 @@ fetch_vault_license() (
 #    Cluster Coordination Helpers     #
 #######################################
 
-initialize_vault_cluster() (
-  log_info "Initializing Vault cluster"
-
-  if vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null; then
-    log_warn "Cluster already initialized, skipping"
-    return 0
-  fi
-
-  log_info "Running vault operator init"
-  # KMS auto-unseal is configured, so recovery shares/threshold are used
-  # in place of unseal shares/threshold.
-  init_output="$(
-    vault operator init \
-      -format=json \
-      -recovery-shares=5 \
-      -recovery-threshold=3
-  )"
-
-  root_token="$(printf '%s' "$${init_output}" | jq -r '.root_token')"
-  recovery_keys="$(printf '%s' "$${init_output}" | jq -c '.recovery_keys_b64')"
-
-  log_info "Storing bootstrap root token in Secrets Manager"
-  put_secret "$${ROOT_TOKEN_SECRET_ARN}" "$${root_token}"
-
-  log_info "Storing recovery keys in Secrets Manager"
-  put_secret "$${RECOVERY_KEYS_SECRET_ARN}" "$${recovery_keys}"
-
-  log_info "Writing cluster state: Ready"
-  put_parameter "$${BOOTSTRAP_CLUSTER_STATE_NAME}" "Ready"
-
-  log_info "Cluster initialization complete"
-)
-
-join_cluster() (
-  log_info "Joining the Vault cluster"
-
-  # 60 attempts x 10s = 10 minutes.
-  max_attempts=60
-  attempt=0
-  while [ "$${attempt}" -lt "$${max_attempts}" ]; do
-    attempt=$((attempt + 1))
-
-    state="$(fetch_parameter "$${BOOTSTRAP_CLUSTER_STATE_NAME}")" || true
-    if [ "$${state}" = "Ready" ]; then
-      log_info "Cluster is ready, proceeding"
-      return 0
-    fi
-
-    log_info "Cluster is not initialized (attempt $${attempt}/$${max_attempts}), waiting"
-    sleep 5
-  done
-
-  log_error "Unable to join the Vault cluster after $${max_attempts} attempts, failing bootstrap"
-  return 1
-)
-
 publish_tls_ca_bundle() (
   log_info "Publishing PKI managed TLS CA bundle to SSM"
 
@@ -510,41 +453,6 @@ wait_for_vault_api() (
   done
 
   log_error "Vault API did not respond after $${attempt} attempts, failing bootstrap"
-  return 1
-)
-
-wait_for_vault_unsealed() (
-  log_info "Waiting for the Vault cluster to be unsealed"
-
-  # 60 attempts x 10s = 10 minutes.
-  max_attempts=60
-  attempt=0
-  while [ "$${attempt}" -lt "$${max_attempts}" ]; do
-    attempt=$((attempt + 1))
-
-    vault_status_exit_code=0
-    vault_status_err="$(vault status -format=json 2>&1 >/dev/null)" ||
-      vault_status_exit_code="$?"
-
-    case "$${vault_status_exit_code}" in
-      0)
-        log_info "Cluster is unsealed, proceeding"
-        return 0
-        ;;
-      2)
-        : # Sealed, keep waiting
-        ;;
-      *)
-        log_warn "Vault returned an error when querying status:"
-        log_warn "$${vault_status_err}"
-        ;;
-    esac
-
-    log_info "Cluster is not unsealed (attempt $${attempt}/$${max_attempts}), waiting"
-    sleep 5
-  done
-
-  log_error "Vault did not unseal after $${max_attempts} attempts, failing bootstrap"
   return 1
 )
 
@@ -1035,18 +943,13 @@ main() {
   start_vault
   wait_for_vault_api
 
-  if [ "$${vault_node_role}" = "bootstrap" ]; then
-    log_info "=== Bootstrap Node ==="
-    initialize_vault_cluster
-    VAULT_TOKEN="$(fetch_secret "$${ROOT_TOKEN_SECRET_ARN}")"
-    export VAULT_TOKEN
-  else
-    join_cluster
-    wait_for_vault_unsealed
-  fi
+  /var/lib/cloud/scripts/ensure-vault-cluster.sh
 
   # Enable PKI and TLS
   if [ "$${vault_node_role}" = "bootstrap" ]; then
+    VAULT_TOKEN="$(fetch_secret "$${ROOT_TOKEN_SECRET_ARN}")"
+    export VAULT_TOKEN
+
     configure_pki_vault_secrets_engine
     intermediate_csr="$(generate_pki_intermediate_csr)"
     publish_pki_intermediate_csr "$${intermediate_csr}"

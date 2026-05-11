@@ -40,6 +40,11 @@ write_files:
     permissions: '0755'
     content: |
       ${indent(6, install_vault_script)}
+  - path: /var/lib/cloud/scripts/ensure-vault-cluster.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      ${indent(6, ensure_vault_cluster_script)}
   - path: /var/lib/cloud/scripts/vault-bootstrap.sh
     owner: root:root
     permissions: '0755'

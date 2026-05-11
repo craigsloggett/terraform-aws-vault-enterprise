@@ -49,6 +49,7 @@ resource "aws_launch_template" "vault_enterprise" {
       auto_join_tag_value                                = var.compute.auto_join.tag_value
       bootstrap_cluster_state_name                       = aws_ssm_parameter.bootstrap_cluster_state.name
       bootstrap_node_id_name                             = aws_ssm_parameter.bootstrap_node_id.name
+      recovery_keys_secret_arn                           = aws_secretsmanager_secret.recovery_keys.arn
       root_token_secret_arn                              = aws_secretsmanager_secret.root_token.arn
       vault_fqdn                                         = local.vault_fqdn
       vault_version                                      = var.vault.version
@@ -60,6 +61,7 @@ resource "aws_launch_template" "vault_enterprise" {
     # Bootstrap Scripts
     determine_vault_node_role_script = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
     install_vault_script             = file("${path.module}/files/bootstrap/install-vault.sh")
+    ensure_vault_cluster_script      = file("${path.module}/files/bootstrap/ensure-vault-cluster.sh")
     configure_autopilot_script       = file("${path.module}/files/bootstrap/configure-autopilot.sh")
     configure_snapshots_script       = file("${path.module}/files/bootstrap/configure-snapshots.sh")
 
@@ -92,7 +94,6 @@ resource "aws_launch_template" "vault_enterprise" {
       bootstrap_pki_state_name     = aws_ssm_parameter.bootstrap_pki_state.name
       bootstrap_node_id_name       = aws_ssm_parameter.bootstrap_node_id.name
       root_token_secret_arn        = aws_secretsmanager_secret.root_token.arn
-      recovery_keys_secret_arn     = aws_secretsmanager_secret.recovery_keys.arn
 
       # PKI and TLS Configuration
       vault_pki_intermediate_ca_common_name               = var.vault_pki.intermediate_ca.common_name
