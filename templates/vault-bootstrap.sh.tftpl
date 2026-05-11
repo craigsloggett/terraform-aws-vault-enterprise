@@ -430,32 +430,6 @@ export VAULT_CACERT="$${VAULT_TLS_CA_FILE}"
 EOF
 )
 
-start_vault() (
-  log_info "Starting Vault"
-
-  systemctl daemon-reload
-  systemctl enable --now vault
-)
-
-wait_for_vault_api() (
-  log_info "Waiting for the Vault API to be ready"
-
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    status="$(
-      curl -sk -o /dev/null -w '%%{http_code}' \
-        "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null
-    )" || true
-
-    if [ "$${status}" != "000" ]; then
-      return 0
-    fi
-    sleep 5
-  done
-
-  log_error "Vault API did not respond after $${attempt} attempts, failing bootstrap"
-  return 1
-)
-
 write_vault_license() (
   vault_license="$(fetch_vault_license)"
 
@@ -939,9 +913,7 @@ main() {
   # Identify Bootstrap Node
   vault_node_role="$(get_vault_node_role)"
 
-  # Start Vault
-  start_vault
-  wait_for_vault_api
+  /var/lib/cloud/scripts/start-vault.sh
 
   /var/lib/cloud/scripts/ensure-vault-cluster.sh
 

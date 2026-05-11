@@ -61,6 +61,7 @@ resource "aws_launch_template" "vault_enterprise" {
     # Bootstrap Scripts
     determine_vault_node_role_script = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
     install_vault_script             = file("${path.module}/files/bootstrap/install-vault.sh")
+    start_vault_script               = file("${path.module}/files/bootstrap/start-vault.sh")
     ensure_vault_cluster_script      = file("${path.module}/files/bootstrap/ensure-vault-cluster.sh")
     configure_autopilot_script       = file("${path.module}/files/bootstrap/configure-autopilot.sh")
     configure_snapshots_script       = file("${path.module}/files/bootstrap/configure-snapshots.sh")
