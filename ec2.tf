@@ -49,10 +49,15 @@ resource "aws_launch_template" "vault_enterprise" {
       auto_join_tag_value                                = var.compute.auto_join.tag_value
       bootstrap_cluster_state_name                       = aws_ssm_parameter.bootstrap_cluster_state.name
       bootstrap_node_id_name                             = aws_ssm_parameter.bootstrap_node_id.name
+      bootstrap_pki_state_name                           = aws_ssm_parameter.bootstrap_pki_state.name
+      bootstrap_tls_ca_secret_arn                        = aws_secretsmanager_secret.bootstrap_tls_ca.arn
+      bootstrap_tls_cert_secret_arn                      = aws_secretsmanager_secret.bootstrap_tls_cert.arn
+      bootstrap_tls_private_key_secret_arn               = aws_secretsmanager_secret.bootstrap_tls_private_key.arn
       license_secret_arn                                 = aws_secretsmanager_secret.license.arn
       recovery_keys_secret_arn                           = aws_secretsmanager_secret.recovery_keys.arn
       root_token_secret_arn                              = aws_secretsmanager_secret.root_token.arn
       vault_fqdn                                         = local.vault_fqdn
+      vault_pki_intermediate_ca_ssm_parameter_name       = aws_ssm_parameter.vault_pki_intermediate_ca.name
       vault_version                                      = var.vault.version
       vault_autopilot_cleanup_dead_servers               = var.vault_autopilot.cleanup_dead_servers
       vault_autopilot_dead_server_last_contact_threshold = var.vault_autopilot.dead_server_last_contact_threshold
@@ -60,14 +65,15 @@ resource "aws_launch_template" "vault_enterprise" {
     })
 
     # Bootstrap Scripts
-    common_functions_script          = file("${path.module}/files/bootstrap/common-functions.sh")
-    determine_vault_node_role_script = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
-    install_vault_script             = file("${path.module}/files/bootstrap/install-vault.sh")
-    write_vault_license_script       = file("${path.module}/files/bootstrap/write-vault-license.sh")
-    start_vault_script               = file("${path.module}/files/bootstrap/start-vault.sh")
-    ensure_vault_cluster_script      = file("${path.module}/files/bootstrap/ensure-vault-cluster.sh")
-    configure_autopilot_script       = file("${path.module}/files/bootstrap/configure-autopilot.sh")
-    configure_snapshots_script       = file("${path.module}/files/bootstrap/configure-snapshots.sh")
+    common_functions_script                    = file("${path.module}/files/bootstrap/common-functions.sh")
+    determine_vault_node_role_script           = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
+    install_vault_script                       = file("${path.module}/files/bootstrap/install-vault.sh")
+    write_vault_license_script                 = file("${path.module}/files/bootstrap/write-vault-license.sh")
+    write_vault_bootstrap_tls_materials_script = file("${path.module}/files/bootstrap/write-vault-bootstrap-tls-materials.sh")
+    start_vault_script                         = file("${path.module}/files/bootstrap/start-vault.sh")
+    ensure_vault_cluster_script                = file("${path.module}/files/bootstrap/ensure-vault-cluster.sh")
+    configure_autopilot_script                 = file("${path.module}/files/bootstrap/configure-autopilot.sh")
+    configure_snapshots_script                 = file("${path.module}/files/bootstrap/configure-snapshots.sh")
 
     # Vault Server Configuration
     config_vault_service          = file("${path.module}/files/vault/vault.service")
@@ -93,11 +99,6 @@ resource "aws_launch_template" "vault_enterprise" {
       # Vault Server Configuration
       config_vault_admin_policy  = file("${path.module}/files/policies/admin.hcl")
       config_vault_server_policy = local.config_vault_server_policy
-
-      # Bootstrap Artifacts
-      bootstrap_tls_ca_secret_arn          = aws_secretsmanager_secret.bootstrap_tls_ca.arn
-      bootstrap_tls_cert_secret_arn        = aws_secretsmanager_secret.bootstrap_tls_cert.arn
-      bootstrap_tls_private_key_secret_arn = aws_secretsmanager_secret.bootstrap_tls_private_key.arn
 
       # Bootstrap Coordination Configuration
       bootstrap_cluster_state_name = aws_ssm_parameter.bootstrap_cluster_state.name

@@ -43,11 +43,6 @@ readonly VAULT_FQDN="${vault_fqdn}"
 readonly EBS_RAFT_DEVICE_NAME="${ebs_raft_device_name}"
 readonly EBS_AUDIT_DEVICE_NAME="${ebs_audit_device_name}"
 
-# Bootstrap Artifacts
-readonly BOOTSTRAP_TLS_CA_SECRET_ARN="${bootstrap_tls_ca_secret_arn}"
-readonly BOOTSTRAP_TLS_CERT_SECRET_ARN="${bootstrap_tls_cert_secret_arn}"
-readonly BOOTSTRAP_TLS_PRIVATE_KEY_SECRET_ARN="${bootstrap_tls_private_key_secret_arn}"
-
 # Bootstrap Coordination
 readonly BOOTSTRAP_CLUSTER_STATE_NAME="${bootstrap_cluster_state_name}"
 readonly BOOTSTRAP_PKI_STATE_NAME="${bootstrap_pki_state_name}"
@@ -182,49 +177,6 @@ put_parameter() (
 #   Vault Cluster Discovery Helpers   #
 #######################################
 
-write_vault_bootstrap_tls_materials() (
-  cluster_state="$(fetch_parameter "$${BOOTSTRAP_CLUSTER_STATE_NAME}" 2>/dev/null)" || cluster_state=""
-  pki_state="$(fetch_parameter "$${BOOTSTRAP_PKI_STATE_NAME}" 2>/dev/null)" || pki_state=""
-
-  case "$${cluster_state}" in
-    "" | Uninitialized)
-      if [ "$${pki_state}" = "Ready" ]; then
-        log_error "Corrupt SSM state: pki/state=Ready but cluster/state=Uninitialized"
-        return 1
-      fi
-      log_info "Writing bootstrap TLS CA file"
-      fetch_bootstrap_ca >"$${VAULT_TLS_CA_FILE}"
-      ;;
-    Ready)
-      if [ "$${pki_state}" = "Ready" ]; then
-        log_info "PKI state is Ready: Writing combined PKI and bootstrap TLS CA bundle"
-        # PKI CA for outbound connections to existing nodes, bootstrap CA for local
-        # vault CLI calls until reload_vault_listener replaces the bootstrap cert
-        # with a PKI-signed one.
-        {
-          fetch_tls_ca_bundle
-          fetch_bootstrap_ca
-        } >"$${VAULT_TLS_CA_FILE}"
-      else
-        log_info "Writing bootstrap TLS CA file"
-        fetch_bootstrap_ca >"$${VAULT_TLS_CA_FILE}"
-      fi
-      ;;
-    *)
-      log_error "Unsupported cluster state: '$${cluster_state}'"
-      return 1
-      ;;
-  esac
-
-  log_info "Writing bootstrap TLS certificate and private key"
-  fetch_bootstrap_tls_cert >"$${VAULT_TLS_CERT_FILE}"
-  fetch_bootstrap_tls_private_key >"$${VAULT_TLS_KEY_FILE}"
-
-  chown vault:vault "$${VAULT_TLS_CA_FILE}" "$${VAULT_TLS_CERT_FILE}" "$${VAULT_TLS_KEY_FILE}"
-  chmod 0644 "$${VAULT_TLS_CA_FILE}"
-  chmod 0640 "$${VAULT_TLS_CERT_FILE}" "$${VAULT_TLS_KEY_FILE}"
-)
-
 get_vault_node_role() (
   # Election runs in determine-vault-node-role.sh before this script. The
   # winner publishes its instance ID to BOOTSTRAP_NODE_ID_NAME; once the
@@ -242,18 +194,6 @@ get_vault_node_role() (
   else
     printf 'follower'
   fi
-)
-
-fetch_bootstrap_ca() (
-  fetch_secret "$${BOOTSTRAP_TLS_CA_SECRET_ARN}"
-)
-
-fetch_bootstrap_tls_cert() (
-  fetch_secret "$${BOOTSTRAP_TLS_CERT_SECRET_ARN}"
-)
-
-fetch_bootstrap_tls_private_key() (
-  fetch_secret "$${BOOTSTRAP_TLS_PRIVATE_KEY_SECRET_ARN}"
 )
 
 #######################################
@@ -835,9 +775,6 @@ main() {
   prepare_disk "$${audit_device}" "$${VAULT_LOG_DIR}" "vault-audit"
 
   configure_vault_mount_directories
-
-  # Render Bootstrap Artifacts
-  write_vault_bootstrap_tls_materials
 
   # Identify Bootstrap Node
   vault_node_role="$(get_vault_node_role)"
