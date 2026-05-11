@@ -26,10 +26,8 @@ readonly VAULT_HOME_DIR="/opt/vault"
 readonly VAULT_DATA_DIR="/var/opt/vault"
 readonly VAULT_CONFIG_DIR="/etc/vault.d"
 readonly VAULT_LOG_DIR="/var/log/vault"
-readonly VAULT_LIBEXEC_DIR="/usr/local/libexec/vault"
 readonly VAULT_TLS_DIR="$${VAULT_HOME_DIR}/tls"
 readonly VAULT_RAFT_DIR="$${VAULT_DATA_DIR}/data"
-readonly VAULT_AGENT_TEMPLATE_DIR="$${VAULT_CONFIG_DIR}/templates"
 readonly VAULT_POLICY_DIR="$${VAULT_CONFIG_DIR}/policies"
 
 # Vault File Paths
@@ -38,10 +36,6 @@ readonly VAULT_AUDIT_LOG_FILE="$${VAULT_LOG_DIR}/vault_audit.log"
 readonly VAULT_TLS_CA_FILE="$${VAULT_TLS_DIR}/ca.crt"
 readonly VAULT_TLS_CERT_FILE="$${VAULT_TLS_DIR}/server.crt"
 readonly VAULT_TLS_KEY_FILE="$${VAULT_TLS_DIR}/server.key"
-readonly VAULT_AGENT_CONFIG_FILE="$${VAULT_CONFIG_DIR}/agent.hcl"
-readonly VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE="$${VAULT_AGENT_TEMPLATE_DIR}/vault-server-tls.ctmpl"
-readonly VAULT_AGENT_SERVER_TLS_RELOAD_FILE="$${VAULT_LIBEXEC_DIR}/vault-server-tls-reload.sh"
-readonly VAULT_AGENT_RELOAD_RULES_FILE="/etc/polkit-1/rules.d/10-vault-agent-reload.rules"
 
 # Environment
 readonly VAULT_FQDN="${vault_fqdn}"
@@ -827,60 +821,11 @@ EOF
 #  Install and Configure Vault Agent  #
 #######################################
 
-write_vault_agent_service_unit() (
-  log_info "Writing Vault Agent systemd unit"
-
-  cat >/etc/systemd/system/vault-agent.service <<'EOF'
-${config_vault_agent_service}
-EOF
-)
-
 start_vault_agent() (
   log_info "Starting Vault Agent"
 
   systemctl daemon-reload
   systemctl enable --now vault-agent
-)
-
-write_vault_agent_reload_rules() (
-  log_info "Writing Vault Agent polkit rules"
-
-  cat >"$${VAULT_AGENT_RELOAD_RULES_FILE}" <<'EOF'
-${config_vault_agent_reload_rules}
-EOF
-)
-
-write_vault_agent_config() (
-  log_info "Writing Vault Agent configuration"
-
-  cat >"$${VAULT_AGENT_CONFIG_FILE}" <<'EOF'
-${config_vault_agent_hcl}
-EOF
-
-  chown vault:vault "$${VAULT_AGENT_CONFIG_FILE}"
-  chmod 0644 "$${VAULT_AGENT_CONFIG_FILE}"
-)
-
-write_vault_agent_tls_template() (
-  log_info "Writing Vault Agent TLS certificate template"
-
-  cat >"$${VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE}" <<'EOF'
-${config_vault_agent_server_tls_ctmpl}
-EOF
-
-  chown vault:vault "$${VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE}"
-  chmod 0644 "$${VAULT_AGENT_SERVER_TLS_TEMPLATE_FILE}"
-)
-
-write_vault_agent_reload_script() (
-  log_info "Writing Vault Agent TLS reload script"
-
-  cat >"$${VAULT_AGENT_SERVER_TLS_RELOAD_FILE}" <<'EOF'
-${config_vault_agent_reload_vault_server_tls}
-EOF
-
-  chown root:root "$${VAULT_AGENT_SERVER_TLS_RELOAD_FILE}"
-  chmod 0755 "$${VAULT_AGENT_SERVER_TLS_RELOAD_FILE}"
 )
 
 main() {
@@ -951,11 +896,6 @@ main() {
 
   # Enable Vault Agent TLS Rotation
   write_vault_shell_env
-  write_vault_agent_config
-  write_vault_agent_tls_template
-  write_vault_agent_reload_script
-  write_vault_agent_reload_rules
-  write_vault_agent_service_unit
   start_vault_agent
 
   log_info "=== Bootstrap complete ==="

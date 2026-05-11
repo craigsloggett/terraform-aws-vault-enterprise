@@ -82,6 +82,18 @@ write_files:
     defer: true
     content: |
       ${indent(6, config_vault_snapshot_json)}
+  - path: /etc/vault.d/agent.hcl
+    owner: vault:vault
+    permissions: '0644'
+    defer: true
+    content: |
+      ${indent(6, config_vault_agent_hcl)}
+  - path: /etc/vault.d/templates/vault-server-tls.ctmpl
+    owner: vault:vault
+    permissions: '0644'
+    defer: true
+    content: |
+      {% raw %}${indent(6, config_vault_agent_server_tls_ctmpl)}{% endraw +%}
   - path: /etc/systemd/system/vault.service
     owner: root:root
     permissions: '0644'
@@ -92,6 +104,21 @@ write_files:
     permissions: '0600'
     content: |
       ${indent(6, config_vault_service_override)}
+  - path: /etc/systemd/system/vault-agent.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      ${indent(6, config_vault_agent_service)}
+  - path: /etc/polkit-1/rules.d/10-vault-agent-reload.rules
+    owner: root:root
+    permissions: '0644'
+    content: |
+      ${indent(6, config_vault_agent_reload_rules)}
+  - path: /usr/local/libexec/vault/vault-server-tls-reload.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      ${indent(6, config_vault_agent_reload_vault_server_tls)}
 
 runcmd:
   - [install, -d, -o, vault, -g, vault, -m, '755', /opt/vault]

@@ -73,6 +73,13 @@ resource "aws_launch_template" "vault_enterprise" {
     config_vault_hcl              = local.config_vault_hcl
     config_vault_snapshot_json    = local.config_vault_snapshot_json
 
+    # Vault Agent Configuration
+    config_vault_agent_hcl                     = local.config_vault_agent_hcl
+    config_vault_agent_server_tls_ctmpl        = local.config_vault_agent_server_tls_ctmpl
+    config_vault_agent_service                 = file("${path.module}/files/agent/vault-agent.service")
+    config_vault_agent_reload_rules            = file("${path.module}/files/agent/vault-agent-reload.rules")
+    config_vault_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
+
     vault_bootstrap_script = templatefile("${path.module}/templates/vault-bootstrap.sh.tftpl", {
       # Environment Configuration
       vault_fqdn         = local.vault_fqdn
@@ -127,13 +134,6 @@ resource "aws_launch_template" "vault_enterprise" {
       vault_auth_jwt_hcp_terraform_oidc_discovery_ca_pem = var.vault_auth_jwt_hcp_terraform.oidc_discovery_ca_pem
       vault_auth_jwt_hcp_terraform_mount_path            = var.vault_auth_jwt_hcp_terraform.mount_path
       vault_auth_jwt_hcp_terraform_role_name             = var.vault_auth_jwt_hcp_terraform.role_name
-
-      # Vault Agent Configuration
-      config_vault_agent_hcl                     = local.config_vault_agent_hcl
-      config_vault_agent_server_tls_ctmpl        = local.config_vault_agent_server_tls_ctmpl
-      config_vault_agent_reload_vault_server_tls = file("${path.module}/files/agent/vault-server-tls-reload.sh")
-      config_vault_agent_reload_rules            = file("${path.module}/files/agent/vault-agent-reload.rules")
-      config_vault_agent_service                 = file("${path.module}/files/agent/vault-agent.service")
     })
   }))
 
