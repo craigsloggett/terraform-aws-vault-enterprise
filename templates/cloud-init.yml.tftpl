@@ -80,11 +80,6 @@ write_files:
     permissions: '0755'
     content: |
       ${indent(6, configure_snapshots_script)}
-  - path: /var/lib/cloud/scripts/start-vault-agent.sh
-    owner: root:root
-    permissions: '0755'
-    content: |
-      ${indent(6, start_vault_agent_script)}
   - path: /etc/profile.d/99-vault-cli-config.sh
     owner: root:root
     permissions: '0644'
@@ -173,4 +168,5 @@ runcmd:
   - [/var/lib/cloud/scripts/vault-bootstrap.sh]
   - [/var/lib/cloud/scripts/configure-autopilot.sh]
   - [/var/lib/cloud/scripts/configure-snapshots.sh]
-  - [/var/lib/cloud/scripts/start-vault-agent.sh]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, vault-agent]
