@@ -50,7 +50,7 @@ resource "aws_launch_template" "vault_enterprise" {
   user_data = base64gzip(templatefile("${path.module}/templates/cloud-init.yml.tftpl", {
     bootstrap_env_file = templatefile("${path.module}/templates/bootstrap.env.tftpl", {
       # Environment
-      vault_fqdn    = local.vault_fqdn
+      vault_fqdn    = var.vault_fqdn
       vault_version = var.vault.version
 
       # Auto-join Discovery
@@ -133,7 +133,7 @@ resource "aws_launch_template" "vault_enterprise" {
 
     # Vault Server Configuration
     config_vault_cli = templatefile("${path.module}/templates/vault/cli-config.sh.tftpl", {
-      vault_fqdn = local.vault_fqdn
+      vault_fqdn = var.vault_fqdn
     })
 
     config_vault_hcl = templatefile("${path.module}/templates/vault/vault.hcl.tftpl", {
@@ -145,7 +145,7 @@ resource "aws_launch_template" "vault_enterprise" {
       tls_min_version           = var.vault.listener_tcp.tls_min_version
       prometheus_retention_time = var.vault.telemetry.prometheus_retention_time
       disable_hostname          = var.vault.telemetry.disable_hostname
-      vault_fqdn                = local.vault_fqdn
+      vault_fqdn                = var.vault_fqdn
       aws_region                = data.aws_region.current.region
       kms_key_alias             = aws_kms_alias.auto_unseal.name
       auto_join_tag_key         = var.compute.auto_join.tag_key
@@ -172,11 +172,11 @@ resource "aws_launch_template" "vault_enterprise" {
 
     # Vault Agent Configuration
     config_vault_agent_hcl = templatefile("${path.module}/templates/agent/agent.hcl.tftpl", {
-      vault_fqdn = local.vault_fqdn
+      vault_fqdn = var.vault_fqdn
     })
 
     config_vault_agent_server_tls_ctmpl = templatefile("${path.module}/templates/agent/vault-server-tls.ctmpl.tftpl", {
-      vault_fqdn                = local.vault_fqdn
+      vault_fqdn                = var.vault_fqdn
       vault_pki_mount_path      = var.vault_pki.mount_path
       vault_pki_server_cert_ttl = var.vault_pki.server_cert_ttl
     })
@@ -268,7 +268,14 @@ resource "aws_autoscaling_group" "vault_enterprise" {
     strategy = "Rolling"
 
     preferences {
-      min_healthy_percentage = local.instance_refresh_min_healthy_pct
+      # Derived as maximum nodes that can be out during instance
+      # refresh while maintaining quorum.
+      #  floor((n-1) * 100 / n) gives:
+      #   n=3 --> 66% (1 node out, 2 healthy)
+      #   n=5 --> 80% (1 node out, 4 healthy)
+      min_healthy_percentage = floor(
+        (var.compute.node_count - 1) * 100 / var.compute.node_count
+      )
     }
   }
 
