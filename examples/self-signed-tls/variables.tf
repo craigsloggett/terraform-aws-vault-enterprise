@@ -4,7 +4,7 @@ variable "vault_enterprise_license" {
   sensitive   = true
 }
 
-variable "route53_zone_name" {
+variable "vault_fqdn" {
   type        = string
-  description = "Name of the Route 53 hosted zone for the Vault DNS record."
+  description = "Fully qualified domain name in presentation form for the Vault Enterprise cluster."
 }

@@ -1,6 +1,6 @@
 output "vault_url" {
   description = "URL of the Vault Enterprise cluster."
-  value       = "https://${local.vault_fqdn}"
+  value       = "https://${var.vault_fqdn}"
 }
 
 output "vault_version" {
@@ -11,6 +11,16 @@ output "vault_version" {
 output "bastion_public_ip" {
   description = "Public IP of the bastion host."
   value       = aws_instance.bastion.public_ip
+}
+
+output "nlb_dns_name" {
+  description = "AWS-assigned DNS name of the Vault NLB. Use this as the CNAME target when DNS is managed outside Route 53."
+  value       = aws_lb.vault_enterprise.dns_name
+}
+
+output "nlb_zone_id" {
+  description = "Hosted zone ID of the Vault NLB. Use this when creating a Route 53 alias record outside this module."
+  value       = aws_lb.vault_enterprise.zone_id
 }
 
 output "autoscaling_group_name" {

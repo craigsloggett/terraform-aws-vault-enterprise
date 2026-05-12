@@ -6,16 +6,67 @@ variable "vault_enterprise_license" {
   sensitive   = true
 }
 
+variable "vault_fqdn" {
+  type        = string
+  description = <<-EOT
+    Fully qualified domain name in presentation form for the Vault Enterprise
+    cluster. Used as the TLS certificate common name, Vault `api_addr`, and PKI
+    URLs."
+  EOT
+
+  validation {
+    condition     = length(var.vault_fqdn) > 0 && length(var.vault_fqdn) <= 253
+    error_message = "vault_fqdn must be 1-253 characters."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+$", var.vault_fqdn))
+    error_message = "vault_fqdn may only contain lowercase letters, digits, hyphens, and dots."
+  }
+
+  validation {
+    condition     = !startswith(var.vault_fqdn, ".") && !endswith(var.vault_fqdn, ".")
+    error_message = "vault_fqdn must not start or end with a dot (in the presentation form)."
+  }
+
+  validation {
+    condition     = !strcontains(var.vault_fqdn, "..")
+    error_message = "vault_fqdn must not contain empty labels (consecutive dots)."
+  }
+
+  validation {
+    condition     = strcontains(var.vault_fqdn, ".")
+    error_message = "vault_fqdn must contain at least one dot."
+  }
+
+  validation {
+    condition     = alltrue([for label in split(".", var.vault_fqdn) : length(label) >= 1 && length(label) <= 63])
+    error_message = "Each label must be 1-63 characters."
+  }
+
+  validation {
+    condition     = alltrue([for label in split(".", var.vault_fqdn) : !startswith(label, "-") && !endswith(label, "-")])
+    error_message = "Labels must not start or end with a hyphen."
+  }
+}
+
+# Optional
+
 variable "route53_zone" {
   type = object({
     zone_id = string
     name    = string
   })
 
-  description = "Route 53 hosted zone for the Vault DNS record. Accepts the result of an `aws_route53_zone` data source directly."
+  default     = null
+  description = <<-EOT
+    Route 53 hosted zone in which to create an A record pointing `vault_fqdn`
+    at the module's NLB. Accepts the result of an `aws_route53_zone` data source
+    directly. When `null` (default), no record is created and DNS must be
+    configured out-of-band (typically a CNAME to the `nlb_dns_name` output).
+    `vault_fqdn` must be within the supplied zone's namespace.
+  EOT
 }
-
-# Optional
 
 variable "vault" {
   type = object({
@@ -566,24 +617,6 @@ variable "iam_role" {
       length(policy_name) >= 1 && length(policy_name) <= 64
     ])
     error_message = "IAM inline policy names must be 1-64 characters."
-  }
-}
-
-variable "route53_record" {
-  type = object({
-    subdomain = optional(string, "vault")
-  })
-
-  default     = {}
-  description = <<-EOT
-    Route53 A record configuration. The record is created in the hosted zone
-    supplied via `route53_zone` and points (via alias) at the NLB created by
-    this module.
-  EOT
-
-  validation {
-    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.route53_record.subdomain))
-    error_message = "route53_record.subdomain must be a valid DNS label (lowercase alphanumeric and hyphens, not starting or ending with a hyphen)."
   }
 }
 

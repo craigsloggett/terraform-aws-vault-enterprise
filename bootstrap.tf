@@ -35,12 +35,12 @@ resource "tls_cert_request" "bootstrap_tls_cert_request" {
   private_key_pem = tls_private_key.bootstrap_tls_private_key.private_key_pem
 
   subject {
-    common_name  = local.vault_fqdn
+    common_name  = var.vault_fqdn
     organization = "HashiCorp Vault"
   }
 
   dns_names = [
-    local.vault_fqdn,
+    var.vault_fqdn,
     "localhost"
   ]
 

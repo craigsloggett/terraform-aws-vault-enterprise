@@ -54,16 +54,12 @@ nodes pick up the signed certificate and complete the PKI bootstrap.
 ### main.tf
 
 ```hcl
-data "aws_route53_zone" "selected" {
-  name = var.route53_zone_name
-}
-
 module "vault" {
   # tflint-ignore: terraform_module_pinned_source
   source = "git::https://github.com/craigsloggett/terraform-aws-vault-enterprise"
 
   vault_enterprise_license = var.vault_enterprise_license
-  route53_zone             = data.aws_route53_zone.selected
+  vault_fqdn               = var.vault_fqdn
 }
 ```
 
@@ -163,8 +159,8 @@ resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" 
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_route53_zone_name"></a> [route53\_zone\_name](#input\_route53\_zone\_name) | Name of the Route 53 hosted zone for the Vault DNS record. | `string` | n/a | yes |
 | <a name="input_vault_enterprise_license"></a> [vault\_enterprise\_license](#input\_vault\_enterprise\_license) | Vault Enterprise license string. | `string` | n/a | yes |
+| <a name="input_vault_fqdn"></a> [vault\_fqdn](#input\_vault\_fqdn) | Fully qualified domain name in presentation form for the Vault Enterprise cluster. | `string` | n/a | yes |
 
 ## Resources
 
@@ -176,7 +172,6 @@ resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" 
 | [tls_private_key.root_ca](https://registry.terraform.io/providers/hashicorp/tls/4.2.1/docs/resources/private_key) | resource |
 | [tls_self_signed_cert.root_ca](https://registry.terraform.io/providers/hashicorp/tls/4.2.1/docs/resources/self_signed_cert) | resource |
 | [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/6.44.0/docs/data-sources/region) | data source |
-| [aws_route53_zone.selected](https://registry.terraform.io/providers/hashicorp/aws/6.44.0/docs/data-sources/route53_zone) | data source |
 | [aws_ssm_parameter.vault_pki_intermediate_ca_csr](https://registry.terraform.io/providers/hashicorp/aws/6.44.0/docs/data-sources/ssm_parameter) | data source |
 
 ## Outputs
@@ -184,5 +179,7 @@ resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" 
 | Name | Description |
 | ---- | ----------- |
 | <a name="output_bastion_public_ip"></a> [bastion\_public\_ip](#output\_bastion\_public\_ip) | Public IP of the bastion host. |
+| <a name="output_nlb_dns_name"></a> [nlb\_dns\_name](#output\_nlb\_dns\_name) | AWS-assigned DNS name of the Vault NLB. |
+| <a name="output_nlb_zone_id"></a> [nlb\_zone\_id](#output\_nlb\_zone\_id) | Hosted zone ID of the Vault NLB. |
 | <a name="output_vault_url"></a> [vault\_url](#output\_vault\_url) | URL of the Vault cluster. |
 <!-- END_TF_DOCS -->
