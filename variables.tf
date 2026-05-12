@@ -45,7 +45,7 @@ variable "vault_fqdn" {
   }
 
   validation {
-    condition     = alltrue([for label in split(".", var.vault_fqdn) : !startswith(lable, "-") && !endswith(label, "-")])
+    condition     = alltrue([for label in split(".", var.vault_fqdn) : !startswith(label, "-") && !endswith(label, "-")])
     error_message = "Labels must not start or end with a hyphen."
   }
 }
