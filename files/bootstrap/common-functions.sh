@@ -48,6 +48,12 @@ fetch_secret() (
   return 1
 )
 
+fetch_secret_no_retry() (
+  aws secretsmanager get-secret-value \
+    --secret-id "${1}" \
+    --query SecretString --output text 2>/dev/null
+)
+
 put_secret() (
   aws secretsmanager put-secret-value \
     --secret-id "${1}" \
