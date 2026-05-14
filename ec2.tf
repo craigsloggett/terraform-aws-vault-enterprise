@@ -242,6 +242,90 @@ resource "aws_launch_template" "vault_enterprise" {
       condition     = can(regex("(ubuntu|debian)", lower(var.ami.name)))
       error_message = "The provided AMI must be Ubuntu or Debian-based."
     }
+
+    precondition {
+      condition = (
+        local.root_disk_at_floor ||
+        var.compute.root_disk.iops <= data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops
+      )
+      error_message = format(
+        "compute.root_disk.iops (%d) exceeds the %s baseline EBS IOPS (%d). The instance cannot sustain this provisioned IOPS, so you would be billed for unusable capacity. Set iops to %d to match the instance, or choose a larger instance type.",
+        var.compute.root_disk.iops,
+        var.compute.instance_type,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops,
+      )
+    }
+
+    precondition {
+      condition = (
+        local.root_disk_at_floor ||
+        var.compute.root_disk.throughput <= data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput
+      )
+      error_message = format(
+        "compute.root_disk.throughput (%d MiB/s) exceeds the %s baseline EBS throughput (%.1f MiB/s). The instance cannot sustain this provisioned throughput, so you would be billed for unusable capacity. Set throughput to %d to match the instance, or choose a larger instance type.",
+        var.compute.root_disk.throughput,
+        var.compute.instance_type,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput,
+        floor(data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput),
+      )
+    }
+
+    precondition {
+      condition = (
+        local.raft_data_disk_at_floor ||
+        var.compute.raft_data_disk.iops <= data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops
+      )
+      error_message = format(
+        "compute.raft_data_disk.iops (%d) exceeds the %s baseline EBS IOPS (%d). The instance cannot sustain this provisioned IOPS, so you would be billed for unusable capacity. Set iops to %d to match the instance, or choose a larger instance type.",
+        var.compute.raft_data_disk.iops,
+        var.compute.instance_type,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops,
+      )
+    }
+
+    precondition {
+      condition = (
+        local.raft_data_disk_at_floor ||
+        var.compute.raft_data_disk.throughput <= data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput
+      )
+      error_message = format(
+        "compute.raft_data_disk.throughput (%d MiB/s) exceeds the %s baseline EBS throughput (%.1f MiB/s). The instance cannot sustain this provisioned throughput, so you would be billed for unusable capacity. Set throughput to %d to match the instance, or choose a larger instance type.",
+        var.compute.raft_data_disk.throughput,
+        var.compute.instance_type,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput,
+        floor(data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput),
+      )
+    }
+
+    precondition {
+      condition = (
+        local.audit_disk_at_floor ||
+        var.compute.audit_disk.iops <= data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops
+      )
+      error_message = format(
+        "compute.audit_disk.iops (%d) exceeds the %s baseline EBS IOPS (%d). The instance cannot sustain this provisioned IOPS, so you would be billed for unusable capacity. Set iops to %d to match the instance, or choose a larger instance type.",
+        var.compute.audit_disk.iops,
+        var.compute.instance_type,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_iops,
+      )
+    }
+
+    precondition {
+      condition = (
+        local.audit_disk_at_floor ||
+        var.compute.audit_disk.throughput <= data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput
+      )
+      error_message = format(
+        "compute.audit_disk.throughput (%d MiB/s) exceeds the %s baseline EBS throughput (%.1f MiB/s). The instance cannot sustain this provisioned throughput, so you would be billed for unusable capacity. Set throughput to %d to match the instance, or choose a larger instance type.",
+        var.compute.audit_disk.throughput,
+        var.compute.instance_type,
+        data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput,
+        floor(data.aws_ec2_instance_type.compute.ebs_performance_baseline_throughput),
+      )
+    }
   }
 }
 
