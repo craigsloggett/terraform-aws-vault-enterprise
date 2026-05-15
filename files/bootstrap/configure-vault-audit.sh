@@ -16,7 +16,7 @@ set -euf
 readonly VAULT_AUDIT_LOG_FILE="/var/log/vault/vault_audit.log"
 
 main() {
-  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_NAME}")"
+  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_SSM_PARAMETER_NAME}")"
 
   if [ "${INSTANCE_ID}" != "${bootstrap_id}" ]; then
     log_info "Not the bootstrap node, skipping audit device configuration"

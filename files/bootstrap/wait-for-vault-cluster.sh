@@ -17,20 +17,19 @@ set -euf
 wait_for_cluster_ready() (
   log_info "Waiting for the Vault cluster to be initialized"
 
-  # 60 attempts x 5s = 5 minutes.
+  interval=5
   max_attempts=60
   attempt=0
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     attempt=$((attempt + 1))
 
-    state="$(fetch_parameter "${BOOTSTRAP_CLUSTER_STATE_NAME}")" || true
+    state="$(fetch_parameter "${BOOTSTRAP_CLUSTER_STATE_SSM_PARAMETER_NAME}")" || true
     if [ "${state}" = "Ready" ]; then
       log_info "Cluster is ready, proceeding"
       return 0
     fi
 
-    log_info "Cluster is not initialized (attempt ${attempt}/${max_attempts}), waiting"
-    sleep 5
+    sleep "${interval}"
   done
 
   log_error "Unable to join the Vault cluster after ${max_attempts} attempts"
@@ -40,9 +39,10 @@ wait_for_cluster_ready() (
 wait_for_vault_unsealed() (
   log_info "Waiting for the local Vault node to be unsealed"
 
-  # 60 attempts x 10s = 10 minutes.
+  interval=5
   max_attempts=60
   attempt=0
+
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     attempt=$((attempt + 1))
 
@@ -64,8 +64,7 @@ wait_for_vault_unsealed() (
         ;;
     esac
 
-    log_info "Cluster is not unsealed (attempt ${attempt}/${max_attempts}), waiting"
-    sleep 5
+    sleep "${interval}"
   done
 
   log_error "Vault did not unseal after ${max_attempts} attempts"

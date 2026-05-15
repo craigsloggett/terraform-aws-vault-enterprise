@@ -184,8 +184,8 @@ publish_vault_pki_ca_chain() (
 )
 
 publish_vault_pki_state() (
-  log_info "Publishing Vault PKI state to ${BOOTSTRAP_PKI_STATE_NAME}"
-  put_parameter "${BOOTSTRAP_PKI_STATE_NAME}" "Ready"
+  log_info "Publishing Vault PKI state to ${BOOTSTRAP_PKI_STATE_SSM_PARAMETER_NAME}"
+  put_parameter "${BOOTSTRAP_PKI_STATE_SSM_PARAMETER_NAME}" "Ready"
 )
 
 wait_for_vault_pki_ready() (
@@ -198,7 +198,7 @@ wait_for_vault_pki_ready() (
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     attempt=$((attempt + 1))
 
-    vault_pki_state="$(fetch_parameter "${BOOTSTRAP_PKI_STATE_NAME}")" || true
+    vault_pki_state="$(fetch_parameter "${BOOTSTRAP_PKI_STATE_SSM_PARAMETER_NAME}")" || true
     if [ "${vault_pki_state}" = "Ready" ]; then
       return 0
     fi
@@ -215,7 +215,7 @@ main() {
   export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
   export VAULT_CACERT="/opt/vault/tls/ca.crt"
 
-  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_NAME}")"
+  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_SSM_PARAMETER_NAME}")"
 
   if [ "${INSTANCE_ID}" != "${bootstrap_id}" ]; then
     wait_for_vault_pki_ready

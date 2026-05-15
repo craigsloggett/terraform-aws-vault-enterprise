@@ -41,13 +41,13 @@ initialize_cluster() (
   put_secret "${RECOVERY_KEYS_SECRET_ARN}" "${recovery_keys}"
 
   log_info "Writing cluster state: Ready"
-  put_parameter "${BOOTSTRAP_CLUSTER_STATE_NAME}" "Ready"
+  put_parameter "${BOOTSTRAP_CLUSTER_STATE_SSM_PARAMETER_NAME}" "Ready"
 
   log_info "Cluster initialization complete"
 )
 
 main() {
-  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_NAME}")"
+  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_SSM_PARAMETER_NAME}")"
 
   if [ "${INSTANCE_ID}" != "${bootstrap_id}" ]; then
     log_info "Not the bootstrap node, skipping cluster initialization"
