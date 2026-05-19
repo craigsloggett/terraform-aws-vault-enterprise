@@ -40,16 +40,21 @@ retry_until() (
 # AWS Systems Manager Parameter Store
 
 fetch_parameter() (
+  parameter_name="$1"
+
   aws ssm get-parameter \
-    --name "$1" \
+    --name "${parameter_name}" \
     --query "Parameter.Value" \
     --output text
 )
 
 put_parameter() (
+  parameter_name="$1"
+  parameter_value="$2"
+
   aws ssm put-parameter \
-    --name "$1" \
-    --value "$2" \
+    --name "${parameter_name}" \
+    --value "${parameter_value}" \
     --type String \
     --overwrite \
     >/dev/null
@@ -57,60 +62,71 @@ put_parameter() (
 
 # AWS Secrets Manager
 
-fetch_secret() (
-  for attempt in 1 2 3 4 5; do
-    if result="$(
-      aws secretsmanager get-secret-value \
-        --secret-id "$1" \
-        --query SecretString --output text 2>/dev/null
-    )"; then
-      printf '%s' "${result}"
-      return 0
-    fi
-    sleep 5
-  done
-
-  log_error "Failed to retrieve secret after ${attempt} attempts"
-  return 1
-)
-
 fetch_secret_no_retry() (
+  secret_id="$1"
+
   aws secretsmanager get-secret-value \
-    --secret-id "$1" \
+    --secret-id "${secret_id}" \
     --query SecretString --output text 2>/dev/null
 )
 
+fetch_secret() (
+  secret_id="$1"
+
+  interval=5
+  max_attempts=5
+
+  if retry_until "${interval}" "${max_attempts}" \
+    fetch_secret_no_retry "${secret_id}"; then
+    return 0
+  fi
+
+  log_error "Failed to retrieve secret ${secret_id} after ${max_attempts} attempts"
+  return 1
+)
+
 put_secret() (
+  secret_id="$1"
+  secret_string="$2"
+
   aws secretsmanager put-secret-value \
-    --secret-id "$1" \
-    --secret-string "$2" \
+    --secret-id "${secret_id}" \
+    --secret-string "${secret_string}" \
     >/dev/null
 )
 
 # Amazon Elastic Compute Cloud
 
+scan_instance_ids_with_tag() (
+  tag_key="$1"
+  tag_value="$2"
+
+  result="$(
+    aws ec2 describe-instances \
+      --filters \
+      "Name=tag:${tag_key},Values=${tag_value}" \
+      "Name=instance-state-name,Values=running" \
+      --query "Reservations[].Instances[].InstanceId" \
+      --output text 2>/dev/null
+  )" || return 1
+
+  [ -n "${result}" ] || return 1
+
+  printf '%s' "${result}"
+)
+
 fetch_instance_ids_with_tag() (
   tag_key="$1"
   tag_value="$2"
 
-  for attempt in 1 2 3 4 5; do
-    result="$(
-      aws ec2 describe-instances \
-        --filters \
-        "Name=tag:${tag_key},Values=${tag_value}" \
-        "Name=instance-state-name,Values=running" \
-        --query "Reservations[].Instances[].InstanceId" \
-        --output text 2>/dev/null
-    )" || result=""
+  interval=5
+  max_attempts=5
 
-    if [ -n "${result}" ]; then
-      printf '%s' "${result}"
-      return 0
-    fi
+  if retry_until "${interval}" "${max_attempts}" \
+    scan_instance_ids_with_tag "${tag_key}" "${tag_value}"; then
+    return 0
+  fi
 
-    sleep 5
-  done
-
-  log_error "No instances found for tag ${tag_key}=${tag_value} after ${attempt} attempts"
+  log_error "No instances found for tag ${tag_key}=${tag_value} after ${max_attempts} attempts"
   return 1
 )
