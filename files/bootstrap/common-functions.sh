@@ -90,21 +90,27 @@ put_secret() (
 # Amazon Elastic Compute Cloud
 
 fetch_instance_ids_with_tag() (
+  tag_key="$1"
+  tag_value="$2"
+
   for attempt in 1 2 3 4 5; do
-    if result="$(
+    result="$(
       aws ec2 describe-instances \
         --filters \
-        "Name=tag:${1},Values=${2}" \
+        "Name=tag:${tag_key},Values=${tag_value}" \
         "Name=instance-state-name,Values=running" \
         --query "Reservations[].Instances[].InstanceId" \
         --output text 2>/dev/null
-    )"; then
+    )" || result=""
+
+    if [ -n "${result}" ]; then
       printf '%s' "${result}"
       return 0
     fi
+
     sleep 5
   done
 
-  log_error "Failed to list instances after ${attempt} attempts"
+  log_error "No instances found for tag ${tag_key}=${tag_value} after ${attempt} attempts"
   return 1
 )
