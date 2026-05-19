@@ -17,28 +17,31 @@ start_vault() (
   systemctl enable --now vault
 )
 
-wait_for_vault_api() (
+vault_api_responding() (
+  status="$(
+    curl --silent --insecure --output /dev/null --write-out '%{http_code}' \
+      "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null
+  )" || return 1
+
+  [ "${status}" != "000" ]
+)
+
+await_vault_api() (
   log_info "Waiting for the Vault API to be ready"
 
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    status="$(
-      curl -sk -o /dev/null -w '%{http_code}' \
-        "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null
-    )" || true
+  interval=5
+  max_attempts=10
 
-    if [ "${status}" != "000" ]; then
-      return 0
-    fi
-    sleep 5
-  done
-
-  log_error "Vault API did not respond after ${attempt} attempts"
-  return 1
+  retry_until "${interval}" "${max_attempts}" vault_api_responding ||
+    {
+      log_error "Vault API did not respond after ${max_attempts} attempts"
+      return 1
+    }
 )
 
 main() {
   start_vault
-  wait_for_vault_api
+  await_vault_api
 }
 
 main "$@"

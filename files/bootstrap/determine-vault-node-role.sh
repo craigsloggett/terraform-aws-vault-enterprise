@@ -2,8 +2,7 @@
 # determine-vault-node-role.sh
 #
 # Elects the bootstrap node by lowest EC2 instance ID and publishes the
-# winner's instance ID to SSM. All nodes run this script; the winner writes
-# the parameter and the rest wait for it to appear before continuing.
+# winner's instance ID to SSM.
 
 set -euf
 
@@ -12,62 +11,73 @@ set -euf
 # shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
-fetch_cluster_instance_ids() (
-  fetch_instance_ids_with_tag "${AUTO_JOIN_TAG_KEY}" "${AUTO_JOIN_TAG_VALUE}"
+bootstrap_cluster_ready() (
+  bootstrap_cluster_state="$(
+    fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}" 2>/dev/null
+  )" || bootstrap_cluster_state=""
+
+  [ "${bootstrap_cluster_state}" = "Ready" ]
 )
 
 is_bootstrap_node() (
   cluster_instance_ids="$1"
 
-  lowest_id="$(printf '%s' "${cluster_instance_ids}" | tr '\t' '\n' | sort | head -1)"
+  lowest_instance_id="$(
+    printf '%s' "${cluster_instance_ids}" |
+      tr '\t' '\n' | sort | head -1
+  )"
 
-  [ "${INSTANCE_ID}" = "${lowest_id}" ]
+  [ "${INSTANCE_ID}" = "${lowest_instance_id}" ]
 )
 
-wait_for_bootstrap_election() (
-  log_info "Waiting for bootstrap node election to complete"
+bootstrap_instance_id_published() (
+  bootstrap_instance_id="$(
+    fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" 2>/dev/null
+  )" || return 1
+
+  [ -n "${bootstrap_instance_id}" ] || return 1
+  [ "${bootstrap_instance_id}" != "Uninitialized" ] || return 1
+
+  return 0
+)
+
+claim_bootstrap_role() (
+  log_info "================================================================"
+  log_info ""
+  log_info "             This Vault node won bootstrap election             "
+  log_info ""
+  log_info "================================================================"
+  log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
+  log_info "Publishing instance ID to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
+
+  put_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" "${INSTANCE_ID}"
+)
+
+await_bootstrap_election() (
+  log_info "Waiting for bootstrap election to be published to SSM"
 
   interval=5
   max_attempts=60
-  attempt=0
 
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    attempt=$((attempt + 1))
-
-    bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" 2>/dev/null)" || true
-
-    if [ -n "${bootstrap_instance_id}" ] && [ "${bootstrap_instance_id}" != "Uninitialized" ]; then
-      log_info "Bootstrap node is ${bootstrap_instance_id}"
-      return 0
-    fi
-
-    sleep "${interval}"
-  done
-
-  log_error "Timed out after ${max_attempts} attempts"
-  return 1
+  retry_until "${interval}" "${max_attempts}" bootstrap_instance_id_published ||
+    {
+      log_error "Bootstrap election not published after ${max_attempts} attempts"
+      return 1
+    }
 )
 
 main() {
-  cluster_state="$(fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}" 2>/dev/null)" || cluster_state=""
-
-  if [ "${cluster_state}" = "Ready" ]; then
+  if bootstrap_cluster_ready; then
     log_info "Cluster already initialized, skipping bootstrap election"
     return 0
   fi
 
-  cluster_instance_ids="$(fetch_cluster_instance_ids)"
+  cluster_instance_ids="$(fetch_instance_ids_with_tag "${AUTO_JOIN_TAG_KEY}" "${AUTO_JOIN_TAG_VALUE}")"
 
   if is_bootstrap_node "${cluster_instance_ids}"; then
-    log_info "================================================================"
-    log_info ""
-    log_info "             This Vault node won bootstrap election             "
-    log_info ""
-    log_info "================================================================"
-    log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
-    put_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" "${INSTANCE_ID}"
+    claim_bootstrap_role
   else
-    wait_for_bootstrap_election
+    await_bootstrap_election
   fi
 }
 

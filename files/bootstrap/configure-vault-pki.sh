@@ -1,11 +1,10 @@
 #!/bin/sh
 # configure-vault-pki.sh
 #
-# Bootstrap node: configures the Vault PKI secrets engine with an externally
-# signed intermediate CA, creates the vault-server PKI role, writes the
-# vault-server policy, publishes the PKI managed TLS CA bundle to SSM, and
-# marks pki_state=Ready. Follower nodes wait for pki_state=Ready before
-# returning. Runs on every node after the cluster is initialized.
+# Cnfigure the Vault PKI secrets engine with an externally signed intermediate
+# CA, creates the vault-server PKI role, writes the vault-server policy,
+# publishes the PKI managed TLS CA bundle to SSM, and marks pki_state=Ready.
+# Follower nodes wait for pki_state=Ready before returning.
 
 set -euf
 
@@ -23,15 +22,11 @@ trap 'rm -rf "${TMPDIR_SESSION}"' EXIT INT TERM HUP
 enable_vault_pki_secrets_engine() (
   log_info "Enabling Vault PKI secrets engine"
 
-  # Check if the secrets engine is already enabled before enabling it.
   if ! vault secrets list -format=json | jq -e --arg path "${VAULT_PKI_MOUNT_PATH}/" '.[$path]' >/dev/null 2>&1; then
     vault secrets enable -path="${VAULT_PKI_MOUNT_PATH}" -description="issues TLS leaf certificates for Vault cluster nodes" pki
   fi
 
-  # Configure the Vault PKI max TTL value.
   vault secrets tune -max-lease-ttl="${VAULT_PKI_VAULT_MOUNT_MAX_TTL}" "${VAULT_PKI_MOUNT_PATH}" >/dev/null
-
-  log_info "Vault PKI secrets engine enabled"
 )
 
 configure_vault_pki_urls() (
@@ -47,8 +42,9 @@ EOF
 )
 
 generate_vault_pki_intermediate_ca() (
-  log_info "Generating Vault PKI intermediate CA"
   intermediate_ca_response_file="$1"
+
+  log_info "Generating Vault PKI intermediate CA"
 
   intermediate_ca_payload="$(
     jq -nc \
@@ -65,50 +61,45 @@ ${intermediate_ca_payload}
 EOF
 )
 
-generate_vault_pki_intermediate_ca_csr() (
-  log_info "Generating Vault PKI intermediate CA CSR"
+extract_vault_pki_intermediate_ca_csr() (
   intermediate_ca_response_file="$1"
 
   jq -r '.data.csr' <"${intermediate_ca_response_file}"
 )
 
 publish_vault_pki_intermediate_ca_csr() (
-  log_info "Publishing Vault PKI intermediate CA CSR to ${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}"
   vault_pki_intermediate_ca_csr="$1"
+
+  log_info "Publishing Vault PKI intermediate CA CSR to ${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}"
 
   put_parameter "${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}" "${vault_pki_intermediate_ca_csr}"
 )
 
-wait_for_signed_vault_pki_intermediate_ca() (
+signed_vault_pki_intermediate_ca_available() (
+  signed_vault_pki_intermediate_ca="$(fetch_secret_no_retry "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")" || return 1
+
+  [ -n "${signed_vault_pki_intermediate_ca}" ] || return 1
+
+  return 0
+)
+
+await_signed_vault_pki_intermediate_ca() (
   log_info "Waiting for signed Vault PKI intermediate CA"
 
   interval="${VAULT_PKI_SIGNED_INTERMEDIATE_POLL_INTERVAL_SECONDS}"
   max_attempts=$((VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS / interval))
-  attempt=0
 
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    attempt=$((attempt + 1))
-
-    signed_vault_pki_intermediate_ca="$(fetch_secret_no_retry "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")" || true
-
-    if [ -n "${signed_vault_pki_intermediate_ca}" ]; then
-      return 0
-    fi
-
-    sleep "${interval}"
-  done
-
-  log_error "Timed out after ${max_attempts} attempts"
-  return 1
-)
-
-fetch_signed_vault_pki_intermediate_ca() (
-  fetch_secret "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
+  retry_until "${interval}" "${max_attempts}" _signed_vault_pki_intermediate_ca_available ||
+    {
+      log_error "Signed intermediate CA not available after ${max_attempts} attempts"
+      return 1
+    }
 )
 
 validate_signed_vault_pki_intermediate_ca() (
-  log_info "Validating signed Vault PKI intermediate CA"
   signed_vault_pki_intermediate_ca="$1"
+
+  log_info "Validating signed Vault PKI intermediate CA"
 
   if printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -e 'has("private_key")' >/dev/null 2>&1; then
     log_error "Signed Vault PKI intermediate CA contains a private_key field, aborting"
@@ -125,8 +116,9 @@ validate_signed_vault_pki_intermediate_ca() (
 )
 
 import_signed_vault_pki_intermediate_ca() (
-  log_info "Importing signed Vault PKI intermediate CA"
   signed_vault_pki_intermediate_ca="$1"
+
+  log_info "Importing signed Vault PKI intermediate CA"
 
   intermediate_ca_set_signed_payload="$(
     printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}'
@@ -143,8 +135,6 @@ EOF
   )"
 
   vault write "${VAULT_PKI_MOUNT_PATH}/config/issuers" default="${imported_intermediate_ca_issuer_id}" >/dev/null
-
-  log_info "Signed Vault PKI intermediate CA imported"
 )
 
 configure_vault_pki_role() (
@@ -168,8 +158,6 @@ configure_vault_pki_role() (
 EOF
 
   vault policy write vault-server "${VAULT_POLICY_DIR}/vault-server.hcl"
-
-  log_info "Vault PKI role created"
 )
 
 publish_vault_pki_ca_chain() (
@@ -185,29 +173,29 @@ publish_vault_pki_ca_chain() (
 
 publish_vault_pki_state() (
   log_info "Publishing Vault PKI state to ${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}"
+
   put_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}" "Ready"
 )
 
-wait_for_vault_pki_ready() (
+vault_pki_ready() (
+  vault_pki_state="$(fetch_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}")" || return 1
+
+  [ "${vault_pki_state}" = "Ready" ] || return 1
+
+  return 0
+)
+
+await_vault_pki_ready() (
   log_info "Waiting for the bootstrap node to finish PKI setup"
 
   interval=5
   max_attempts=60
-  attempt=0
 
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    attempt=$((attempt + 1))
-
-    vault_pki_state="$(fetch_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}")" || true
-    if [ "${vault_pki_state}" = "Ready" ]; then
-      return 0
-    fi
-
-    sleep "${interval}"
-  done
-
-  log_error "Timed out after ${max_attempts} attempts"
-  return 1
+  retry_until "${interval}" "${max_attempts}" vault_pki_ready ||
+    {
+      log_error "PKI not ready after ${max_attempts} attempts"
+      return 1
+    }
 )
 
 main() {
@@ -218,7 +206,7 @@ main() {
   bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
 
   if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
-    wait_for_vault_pki_ready
+    await_vault_pki_ready
     return 0
   fi
 
@@ -230,20 +218,20 @@ main() {
 
   intermediate_ca_response_file="${TMPDIR_SESSION}/intermediate_ca_response.json"
   generate_vault_pki_intermediate_ca "${intermediate_ca_response_file}"
-
   publish_vault_pki_intermediate_ca_csr "$(
-    generate_vault_pki_intermediate_ca_csr "${intermediate_ca_response_file}"
+    extract_vault_pki_intermediate_ca_csr "${intermediate_ca_response_file}"
   )"
 
-  wait_for_signed_vault_pki_intermediate_ca
-  signed_vault_pki_intermediate_ca="$(fetch_signed_vault_pki_intermediate_ca)"
+  await_signed_vault_pki_intermediate_ca
+  signed_vault_pki_intermediate_ca="$(fetch_secret "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")"
   validate_signed_vault_pki_intermediate_ca "${signed_vault_pki_intermediate_ca}"
   import_signed_vault_pki_intermediate_ca "${signed_vault_pki_intermediate_ca}"
 
   configure_vault_pki_role
-
   publish_vault_pki_ca_chain
   publish_vault_pki_state
+
+  # TODO: vault token revoke -self >/dev/null 2>&1 || log_error "Failed to revoke root token"
 }
 
 main "$@"
