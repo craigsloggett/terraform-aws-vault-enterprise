@@ -59,7 +59,12 @@ main() {
   cluster_instance_ids="$(fetch_cluster_instance_ids)"
 
   if is_bootstrap_node "${cluster_instance_ids}"; then
-    log_info "This node (${INSTANCE_ID}) won bootstrap election, publishing to SSM"
+    log_info "================================================================"
+    log_info ""
+    log_info "             This Vault node won bootstrap election             "
+    log_info ""
+    log_info "================================================================"
+    log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
     put_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" "${INSTANCE_ID}"
   else
     wait_for_bootstrap_election
