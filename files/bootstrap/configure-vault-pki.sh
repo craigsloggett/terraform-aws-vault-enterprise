@@ -215,7 +215,7 @@ main() {
   export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
   export VAULT_CACERT="/opt/vault/tls/ca.crt"
 
-  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER}")"
+  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
 
   if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
     wait_for_vault_pki_ready

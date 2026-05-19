@@ -46,7 +46,7 @@ initialize_cluster() (
 )
 
 main() {
-  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER}")"
+  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
 
   if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
     log_info "Not the bootstrap node, skipping cluster initialization"
