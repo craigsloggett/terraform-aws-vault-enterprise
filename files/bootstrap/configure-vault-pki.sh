@@ -74,7 +74,7 @@ generate_vault_pki_intermediate_ca_csr() (
 
 publish_vault_pki_intermediate_ca_csr() (
   log_info "Publishing Vault PKI intermediate CA CSR to ${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}"
-  vault_pki_intermediate_ca_csr="${1}"
+  vault_pki_intermediate_ca_csr="$1"
 
   put_parameter "${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}" "${vault_pki_intermediate_ca_csr}"
 )
@@ -108,7 +108,7 @@ fetch_signed_vault_pki_intermediate_ca() (
 
 validate_signed_vault_pki_intermediate_ca() (
   log_info "Validating signed Vault PKI intermediate CA"
-  signed_vault_pki_intermediate_ca="${1}"
+  signed_vault_pki_intermediate_ca="$1"
 
   if printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -e 'has("private_key")' >/dev/null 2>&1; then
     log_error "Signed Vault PKI intermediate CA contains a private_key field, aborting"
@@ -126,7 +126,7 @@ validate_signed_vault_pki_intermediate_ca() (
 
 import_signed_vault_pki_intermediate_ca() (
   log_info "Importing signed Vault PKI intermediate CA"
-  signed_vault_pki_intermediate_ca="${1}"
+  signed_vault_pki_intermediate_ca="$1"
 
   intermediate_ca_set_signed_payload="$(
     printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}'
@@ -246,4 +246,4 @@ main() {
   publish_vault_pki_state
 }
 
-main "${@}"
+main "$@"

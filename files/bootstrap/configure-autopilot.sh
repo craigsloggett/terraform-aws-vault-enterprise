@@ -33,4 +33,4 @@ main() {
     -min-quorum="${VAULT_AUTOPILOT_MIN_QUORUM}"
 }
 
-main "${@}"
+main "$@"

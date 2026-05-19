@@ -98,4 +98,4 @@ main() {
   trust_vault_pki_ca_chain
 }
 
-main "${@}"
+main "$@"

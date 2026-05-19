@@ -68,8 +68,8 @@ resource "aws_launch_template" "vault_enterprise" {
       root_token_secret_arn    = aws_secretsmanager_secret.root_token.arn
 
       # EBS Storage
-      ebs_audit_device_name = "/dev/xvdg"
-      ebs_raft_device_name  = "/dev/xvdf"
+      vault_audit_log_ebs_attachment_name = "/dev/xvdg"
+      vault_raft_data_ebs_attachment_name = "/dev/xvdf"
 
       # Vault Autopilot
       vault_autopilot_cleanup_dead_servers               = var.vault_autopilot.cleanup_dead_servers

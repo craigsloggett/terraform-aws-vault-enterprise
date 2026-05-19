@@ -32,4 +32,4 @@ main() {
     >/dev/null
 }
 
-main "${@}"
+main "$@"

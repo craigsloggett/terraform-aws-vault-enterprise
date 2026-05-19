@@ -35,7 +35,7 @@ write_jwt_auth_config() (
   vault write "auth/${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/config" \
     "oidc_discovery_url=https://${VAULT_AUTH_JWT_HCP_TERRAFORM_HOSTNAME}" \
     "bound_issuer=https://${VAULT_AUTH_JWT_HCP_TERRAFORM_HOSTNAME}" \
-    "${@}" \
+    "$@" \
     >/dev/null
 )
 
@@ -107,4 +107,4 @@ main() {
   bind_admin_jwt_role
 }
 
-main "${@}"
+main "$@"

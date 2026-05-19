@@ -51,7 +51,6 @@ wait_for_vault_unseal() (
 
     case "${vault_status_exit_code}" in
       0)
-        log_info "Cluster is unsealed, proceeding"
         return 0
         ;;
       2)
@@ -71,7 +70,7 @@ wait_for_vault_unseal() (
 )
 
 wait_for_raft_replication() (
-  log_info "Waiting for the local node to catch up on Raft replication"
+  log_info "Waiting for this local Vault node to catch up on Raft replication"
 
   interval=5
   max_attempts=60
@@ -110,4 +109,4 @@ main() {
   wait_for_raft_replication
 }
 
-main "${@}"
+main "$@"

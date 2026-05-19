@@ -45,4 +45,4 @@ main() {
 EOF
 }
 
-main "${@}"
+main "$@"

@@ -20,4 +20,4 @@ main() {
   chmod 0640 /opt/vault/vault.hclic
 }
 
-main "${@}"
+main "$@"

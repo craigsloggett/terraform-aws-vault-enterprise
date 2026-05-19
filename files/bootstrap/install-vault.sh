@@ -29,7 +29,7 @@ detect_system_architecture() (
 )
 
 download_and_verify_vault() (
-  release_filename="${1}"
+  release_filename="$1"
 
   sha256sums_filename="vault_${VAULT_VERSION}_SHA256SUMS"
   sha256sums_signature_filename="vault_${VAULT_VERSION}_SHA256SUMS.sig"
@@ -80,4 +80,4 @@ main() {
   log_info "Vault Enterprise ${VAULT_VERSION} installed"
 }
 
-main "${@}"
+main "$@"

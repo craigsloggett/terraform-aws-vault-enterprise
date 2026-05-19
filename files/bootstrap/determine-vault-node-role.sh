@@ -17,7 +17,7 @@ fetch_cluster_instance_ids() (
 )
 
 is_bootstrap_node() (
-  cluster_instance_ids="${1}"
+  cluster_instance_ids="$1"
 
   lowest_id="$(printf '%s' "${cluster_instance_ids}" | tr '\t' '\n' | sort | head -1)"
 
@@ -66,4 +66,4 @@ main() {
   fi
 }
 
-main "${@}"
+main "$@"

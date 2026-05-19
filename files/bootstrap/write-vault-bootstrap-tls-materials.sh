@@ -40,4 +40,4 @@ main() {
   esac
 }
 
-main "${@}"
+main "$@"

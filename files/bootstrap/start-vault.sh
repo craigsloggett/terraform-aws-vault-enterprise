@@ -41,4 +41,4 @@ main() {
   wait_for_vault_api
 }
 
-main "${@}"
+main "$@"

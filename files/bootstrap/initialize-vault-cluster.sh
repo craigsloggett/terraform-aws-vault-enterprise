@@ -60,4 +60,4 @@ main() {
   initialize_cluster
 }
 
-main "${@}"
+main "$@"
