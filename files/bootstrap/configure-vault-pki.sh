@@ -20,7 +20,7 @@ readonly TMPDIR_SESSION
 trap 'rm -rf "${TMPDIR_SESSION}"' EXIT INT TERM HUP
 
 enable_vault_pki_secrets_engine() (
-  log_info "Enabling the Vault PKI secrets engine"
+  log_info "Enabling the Vault PKI secrets engine at: ${VAULT_PKI_MOUNT_PATH}/"
 
   if ! vault secrets list -format=json | jq -e --arg path "${VAULT_PKI_MOUNT_PATH}/" '.[$path]' >/dev/null 2>&1; then
     vault secrets enable -path="${VAULT_PKI_MOUNT_PATH}" -description="issues TLS leaf certificates for Vault cluster nodes" pki
