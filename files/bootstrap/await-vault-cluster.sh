@@ -50,17 +50,17 @@ vault_unsealed() (
 )
 
 await_vault_unseal() (
-  log_info "Waiting for this Vault node to be unsealed"
+  log_info "Waiting for Vault to be unsealed"
 
   timeout_seconds=1200
   retry_for "${timeout_seconds}" vault_unsealed ||
     {
-      log_error "Vault node did not unseal after ${timeout_seconds}s"
+      log_error "Vault did not unseal after ${timeout_seconds}s"
       return 1
     }
 )
 
-raft_replication_ready() (
+raft_replication_complete() (
   vault_leader_response="$(vault read -format=json sys/leader 2>/dev/null)" || return 1
 
   [ -n "${vault_leader_response}" ] || return 1
@@ -78,10 +78,10 @@ raft_replication_ready() (
 )
 
 await_raft_replication() (
-  log_info "Waiting for Vault Raft replication to be ready"
+  log_info "Waiting for Vault raft replication to complete"
 
   timeout_seconds=1200
-  retry_for "${timeout_seconds}" raft_replication_ready ||
+  retry_for "${timeout_seconds}" raft_replication_complete ||
     {
       log_error "Vault Raft replication did not catch up after ${timeout_seconds}s"
       return 1
