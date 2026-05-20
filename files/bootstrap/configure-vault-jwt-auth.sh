@@ -51,7 +51,7 @@ configure_jwt_auth_method() (
 )
 
 configure_jwt_auth_method_admin_policy() (
-  log_info "Configuring the JWT auth method admin policy"
+  log_info "Configuring the JWT auth method policy: admin"
 
   vault policy write admin "${VAULT_POLICY_DIR}/admin.hcl"
 )
@@ -63,9 +63,9 @@ configure_jwt_auth_method_role() (
 
   if [ -n "${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}" ]; then
     bound_claims="${bound_claims}, \"terraform_workspace_id\": \"${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}\""
-    log_info "Scoping JWT role to workspace ${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}"
+    log_info "Scoping JWT role to workspace: ${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}"
   else
-    log_info "Scoping JWT role to organization ${VAULT_AUTH_JWT_HCP_TERRAFORM_ORGANIZATION_NAME}"
+    log_info "Scoping JWT role to organization: ${VAULT_AUTH_JWT_HCP_TERRAFORM_ORGANIZATION_NAME}"
   fi
 
   log_info "Configuring the JWT auth method role: ${VAULT_AUTH_JWT_HCP_TERRAFORM_ROLE_NAME}"
