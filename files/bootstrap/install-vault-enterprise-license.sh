@@ -21,9 +21,9 @@ install_vault_enterprise_license() (
   log_info "Installing the Vault Enterprise license"
 
   tmp_vault_enterprise_license_file="${TMPDIR_SESSION}/vault.hclic"
-  printf '%s\n' "$(fetch_secret "${LICENSE_SECRET_ARN}")" >"${tmp_vault_enterprise_license_file}"
+  printf '%s' "$(fetch_secret "${LICENSE_SECRET_ARN}")" >"${tmp_vault_enterprise_license_file}"
 
-  install -o vault -g vault -m 0640 -T "${tmp_vault_enterprise_license_file}" "${VAULT_HOME_DIR}/vault.hclic"
+  install -o vault -g vault -m 0640 "${tmp_vault_enterprise_license_file}" "${VAULT_HOME_DIR}/vault.hclic"
 )
 
 main() {
