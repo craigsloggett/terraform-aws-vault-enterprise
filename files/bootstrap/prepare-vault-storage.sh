@@ -40,15 +40,13 @@ resolve_ebs_nvme_block_device_path() (
   ebs_attachment_name="$1"
   ebs_attachment_name_basename="${ebs_attachment_name##*/}"
 
-  interval=5
-  max_attempts=12
-
-  if retry_until "${interval}" "${max_attempts}" \
+  timeout_seconds=30
+  if retry_for "${timeout_seconds}" \
     scan_ebs_nvme_block_device_path "${ebs_attachment_name_basename}"; then
     return 0
   fi
 
-  log_error "NVMe device for attachment ${ebs_attachment_name} did not appear after ${max_attempts} attempts"
+  log_error "NVMe device for attachment ${ebs_attachment_name} did not appear after ${timeout_seconds}s"
   return 1
 )
 

@@ -86,12 +86,10 @@ signed_vault_pki_intermediate_ca_available() (
 await_signed_vault_pki_intermediate_ca() (
   log_info "Waiting for signed Vault PKI intermediate CA"
 
-  interval="${VAULT_PKI_SIGNED_INTERMEDIATE_POLL_INTERVAL_SECONDS}"
-  max_attempts=$((VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS / interval))
-
-  retry_until "${interval}" "${max_attempts}" _signed_vault_pki_intermediate_ca_available ||
+  timeout_seconds="${VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS}"
+  retry_for "${timeout_seconds}" signed_vault_pki_intermediate_ca_available ||
     {
-      log_error "Signed intermediate CA not available after ${max_attempts} attempts"
+      log_error "Signed intermediate CA not available after ${timeout_seconds}s"
       return 1
     }
 )
@@ -188,12 +186,10 @@ vault_pki_ready() (
 await_vault_pki_ready() (
   log_info "Waiting for the bootstrap node to finish PKI setup"
 
-  interval=5
-  max_attempts=60
-
-  retry_until "${interval}" "${max_attempts}" vault_pki_ready ||
+  timeout_seconds=60
+  retry_for "${timeout_seconds}" vault_pki_ready ||
     {
-      log_error "PKI not ready after ${max_attempts} attempts"
+      log_error "PKI not ready after ${timeout_seconds}s"
       return 1
     }
 )

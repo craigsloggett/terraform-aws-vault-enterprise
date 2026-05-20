@@ -29,12 +29,10 @@ vault_api_responding() (
 await_vault_api() (
   log_info "Waiting for the Vault API to be ready"
 
-  interval=5
-  max_attempts=10
-
-  retry_until "${interval}" "${max_attempts}" vault_api_responding ||
+  timeout_seconds=10
+  retry_for "${timeout_seconds}" vault_api_responding ||
     {
-      log_error "Vault API did not respond after ${max_attempts} attempts"
+      log_error "Vault API did not respond after ${timeout_seconds}s"
       return 1
     }
 )

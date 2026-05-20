@@ -16,21 +16,19 @@ log_error() (
   printf '[ERROR] %s\n' "$1" >&2
 )
 
-retry_until() (
-  interval="$1"
-  max_attempts="$2"
-  shift 2
+retry_for() (
+  timeout_seconds="$1"
+  shift 1
 
-  attempt=0
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    attempt=$((attempt + 1))
+  elapsed=0
+  interval=5
 
+  while [ "${elapsed}" -lt "${timeout_seconds}" ]; do
     if "$@"; then
       return 0
-    fi
-
-    if [ "${attempt}" -lt "${max_attempts}" ]; then
+    else
       sleep "${interval}"
+      elapsed=$((elapsed + interval))
     fi
   done
 
@@ -73,15 +71,13 @@ fetch_secret_no_retry() (
 fetch_secret() (
   secret_id="$1"
 
-  interval=5
-  max_attempts=5
-
-  if retry_until "${interval}" "${max_attempts}" \
+  timeout_seconds=20
+  if retry_for "${timeout_seconds}" \
     fetch_secret_no_retry "${secret_id}"; then
     return 0
   fi
 
-  log_error "Failed to retrieve secret ${secret_id} after ${max_attempts} attempts"
+  log_error "Failed to retrieve secret ${secret_id} after ${timeout_seconds}s"
   return 1
 )
 
@@ -119,14 +115,12 @@ fetch_instance_ids_with_tag() (
   tag_key="$1"
   tag_value="$2"
 
-  interval=5
-  max_attempts=5
-
-  if retry_until "${interval}" "${max_attempts}" \
+  timeout_seconds=20
+  if retry_for "${timeout_seconds}" \
     scan_instance_ids_with_tag "${tag_key}" "${tag_value}"; then
     return 0
   fi
 
-  log_error "No instances found for tag ${tag_key}=${tag_value} after ${max_attempts} attempts"
+  log_error "No instances found for tag ${tag_key}=${tag_value} after ${timeout_seconds}s"
   return 1
 )

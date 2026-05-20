@@ -56,12 +56,10 @@ claim_bootstrap_role() (
 await_bootstrap_election() (
   log_info "Waiting for bootstrap election to be published to SSM"
 
-  interval=5
-  max_attempts=60
-
-  retry_until "${interval}" "${max_attempts}" bootstrap_instance_id_published ||
+  timeout_seconds=60
+  retry_for "${timeout_seconds}" bootstrap_instance_id_published ||
     {
-      log_error "Bootstrap election not published after ${max_attempts} attempts"
+      log_error "Bootstrap election not published after ${timeout_seconds}s"
       return 1
     }
 )
