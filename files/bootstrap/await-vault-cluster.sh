@@ -66,16 +66,16 @@ raft_replication_ready() (
 
   [ -n "${vault_leader_response}" ] || return 1
 
-  committed="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_committed_index // empty')"
-  [ -n "${committed}" ] || return 1
+  raft_committed_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_committed_index // empty')"
+  [ -n "${raft_committed_index}" ] || return 1
 
-  applied="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_applied_index // empty')"
-  [ -n "${applied}" ] || return 1
+  raft_applied_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_applied_index // empty')"
+  [ -n "${raft_applied_index}" ] || return 1
 
-  [ "${committed}" -gt 0 ] || return 1
-  [ "${applied}" -ge "${committed}" ] || return 1
+  [ "${raft_committed_index}" -gt 0 ] || return 1
+  [ "${raft_applied_index}" -ge "${raft_committed_index}" ] || return 1
 
-  log_info "Raft replication is ready (applied=${applied} committed=${committed})"
+  log_info "Raft replication is ready (raft_applied_index=${raft_applied_index} raft_committed_index=${raft_committed_index})"
   return 0
 )
 
