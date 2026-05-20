@@ -26,7 +26,7 @@ await_vault_cluster() (
   timeout_seconds=1200
   retry_for "${timeout_seconds}" vault_cluster_ready ||
     {
-      log_error "Unable to join the Vault cluster after ${timeout_seconds}s"
+      log_error "Vault cluster did not become ready after ${timeout_seconds}s"
       return 1
     }
 )
