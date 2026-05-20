@@ -97,8 +97,6 @@ main() {
     return 0
   fi
 
-  log_info "Configuring Vault JWT auth method for HCP Terraform"
-
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
   export VAULT_CACERT="/opt/vault/tls/ca.crt"

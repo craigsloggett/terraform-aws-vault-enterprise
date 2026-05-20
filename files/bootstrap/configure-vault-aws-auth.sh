@@ -15,7 +15,7 @@ set -euf
 . /var/lib/cloud/scripts/common-functions.sh
 
 enable_aws_auth_method() (
-  log_info "Enabling the Vault AWS auth method"
+  log_info "Enabling the Vault AWS auth method at: aws/"
 
   if ! vault auth list -format=json | jq -e '."aws/"' >/dev/null 2>&1; then
     vault auth enable -description="authenticates AWS resources via IAM identity" aws
