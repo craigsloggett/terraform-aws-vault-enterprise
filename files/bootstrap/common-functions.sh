@@ -18,7 +18,13 @@ log_error() (
 
 retry_for() (
   timeout_seconds="$1"
+  predicate="$2"
   shift 1
+
+  if ! command -v "${predicate}" >/dev/null 2>&1; then
+    log_error "retry_for: '${predicate}' is not a defined command or function"
+    return 2
+  fi
 
   interval=5
   elapsed=0
