@@ -28,56 +28,68 @@ detect_system_architecture() (
   esac
 )
 
-download_and_verify_vault() (
-  release_filename="$1"
-
-  sha256sums_filename="vault_${VAULT_VERSION}_SHA256SUMS"
-  sha256sums_signature_filename="vault_${VAULT_VERSION}_SHA256SUMS.sig"
+fetch_vault_release_and_signing_key() (
+  vault_release_filename="$1"
+  vault_release_sha256sums_filename="$2"
 
   log_info "Downloading Vault Enterprise ${VAULT_VERSION}"
   curl --fail --silent --show-error --location \
-    --output "${TMPDIR_SESSION}/${release_filename}" \
-    "https://releases.hashicorp.com/vault/${VAULT_VERSION}/${release_filename}"
+    --output "${TMPDIR_SESSION}/${vault_release_filename}" \
+    "https://releases.hashicorp.com/vault/${VAULT_VERSION}/${vault_release_filename}"
 
   log_info "Downloading Vault Enterprise ${VAULT_VERSION} SHA256SUMS file"
   curl --fail --silent --show-error --location \
-    --output "${TMPDIR_SESSION}/${sha256sums_filename}" \
-    "https://releases.hashicorp.com/vault/${VAULT_VERSION}/${sha256sums_filename}"
+    --output "${TMPDIR_SESSION}/${vault_release_sha256sums_filename}" \
+    "https://releases.hashicorp.com/vault/${VAULT_VERSION}/${vault_release_sha256sums_filename}"
 
   log_info "Downloading Vault Enterprise ${VAULT_VERSION} SHA256SUMS signature file"
   curl --fail --silent --show-error --location \
-    --output "${TMPDIR_SESSION}/${sha256sums_signature_filename}" \
-    "https://releases.hashicorp.com/vault/${VAULT_VERSION}/${sha256sums_signature_filename}"
+    --output "${TMPDIR_SESSION}/${vault_release_sha256sums_filename}.sig" \
+    "https://releases.hashicorp.com/vault/${VAULT_VERSION}/${vault_release_sha256sums_filename}.sig"
 
-  # GPG signature verification (isolated keyring to avoid polluting the system)
+  log_info "Downloading HashiCorp signing key"
+  curl --fail --silent --show-error --location \
+    --output "${TMPDIR_SESSION}/hashicorp.asc" \
+    https://www.hashicorp.com/.well-known/pgp-key.txt
+)
+
+verify_vault_release() (
+  vault_release_filename="$1"
+  vault_release_sha256sums_filename="$2"
+
   export GNUPGHOME="${TMPDIR_SESSION}/.gnupg"
   mkdir -p "${GNUPGHOME}"
   chmod 0700 "${GNUPGHOME}"
 
-  log_info "Trusting HashiCorp PGP key"
-  curl --fail --silent --show-error --location --output "${TMPDIR_SESSION}/hashicorp.asc" \
-    https://www.hashicorp.com/.well-known/pgp-key.txt
+  log_info "Trusting HashiCorp signing key"
   gpg --quiet --import "${TMPDIR_SESSION}/hashicorp.asc"
   printf '%s\n' "C874011F0AB405110D02105534365D9472D7468F:6:" | gpg --quiet --import-ownertrust
 
-  log_info "Verifying PGP signature"
-  gpg --quiet --verify "${TMPDIR_SESSION}/${sha256sums_signature_filename}" "${TMPDIR_SESSION}/${sha256sums_filename}"
+  log_info "Verifying ${vault_release_sha256sums_filename} signature"
+  gpg --quiet --verify \
+    "${TMPDIR_SESSION}/${vault_release_sha256sums_filename}.sig" \
+    "${TMPDIR_SESSION}/${vault_release_sha256sums_filename}"
 
-  log_info "Verifying downloaded artifact SHA256 checksums"
+  log_info "Verifying ${vault_release_filename} checksum"
   cd "${TMPDIR_SESSION}" &&
-    sha256sum --check --ignore-missing "${sha256sums_filename}"
+    sha256sum --check --ignore-missing "${vault_release_sha256sums_filename}"
+)
+
+install_vault() (
+  vault_release_filename="$1"
+
+  log_info "Installing Vault Enterprise ${VAULT_VERSION}"
+  unzip -o -q "${TMPDIR_SESSION}/${vault_release_filename}" -d "${TMPDIR_SESSION}"
+  install -o root -g root -m 0755 "${TMPDIR_SESSION}/vault" /usr/local/bin/vault
 )
 
 main() {
-  log_info "Installing Vault Enterprise ${VAULT_VERSION}"
-
   vault_release_filename="vault_${VAULT_VERSION}_linux_$(detect_system_architecture).zip"
-  download_and_verify_vault "${vault_release_filename}"
+  vault_release_sha256sums_filename="vault_${VAULT_VERSION}_SHA256SUMS"
 
-  unzip -o -q "${TMPDIR_SESSION}/${vault_release_filename}" -d "${TMPDIR_SESSION}"
-  install -o root -g root -m 0755 "${TMPDIR_SESSION}/vault" /usr/local/bin/vault
-
-  log_info "Vault Enterprise ${VAULT_VERSION} installed"
+  fetch_vault_release_and_signing_key "${vault_release_filename}" "${vault_release_sha256sums_filename}"
+  verify_vault_release "${vault_release_filename}" "${vault_release_sha256sums_filename}"
+  install_vault "${vault_release_filename}"
 }
 
 main "$@"
