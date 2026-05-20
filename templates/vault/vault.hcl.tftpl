@@ -5,7 +5,7 @@ cluster_name  = "${cluster_name}"
 log_level  = "${log_level}"
 log_format = "${log_format}"
 
-cluster_addr = "https://{% raw %}{{ GetPrivateIp }}{% endraw %}:8201"
+cluster_addr = "https://{% raw %}{{ GetPrivateIP }}{% endraw %}:8201"
 api_addr     = "https://${vault_fqdn}:8200"
 license_path = "/opt/vault/vault.hclic"
 
