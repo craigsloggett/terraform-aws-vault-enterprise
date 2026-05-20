@@ -53,11 +53,11 @@ write_files:
     content: |
       ${indent(6, script_install_vault)}
 
-  - path: /var/lib/cloud/scripts/write-vault-license.sh
+  - path: /var/lib/cloud/scripts/install-vault-enterprise-license.sh
     owner: root:root
     permissions: '0755'
     content: |
-      ${indent(6, script_write_vault_license)}
+      ${indent(6, script_install_vault_enterprise_license)}
 
   - path: /var/lib/cloud/scripts/write-vault-bootstrap-tls-materials.sh
     owner: root:root
@@ -83,11 +83,11 @@ write_files:
     content: |
       ${indent(6, script_initialize_vault_cluster)}
 
-  - path: /var/lib/cloud/scripts/wait-for-vault-cluster.sh
+  - path: /var/lib/cloud/scripts/await-vault-cluster.sh
     owner: root:root
     permissions: '0755'
     content: |
-      ${indent(6, script_wait_for_vault_cluster)}
+      ${indent(6, script_await_vault_cluster)}
 
   - path: /var/lib/cloud/scripts/configure-vault-audit.sh
     owner: root:root
@@ -241,12 +241,12 @@ runcmd:
   - [install, -d, -o, vault, -g, vault, -m, '755', /etc/vault.d/templates]
   - [/var/lib/cloud/scripts/determine-vault-node-role.sh]
   - [/var/lib/cloud/scripts/install-vault.sh]
-  - [/var/lib/cloud/scripts/write-vault-license.sh]
+  - [/var/lib/cloud/scripts/install-vault-enterprise-license.sh]
   - [/var/lib/cloud/scripts/write-vault-bootstrap-tls-materials.sh]
   - [/var/lib/cloud/scripts/prepare-vault-storage.sh]
   - [/var/lib/cloud/scripts/start-vault.sh]
   - [/var/lib/cloud/scripts/initialize-vault-cluster.sh]
-  - [/var/lib/cloud/scripts/wait-for-vault-cluster.sh]
+  - [/var/lib/cloud/scripts/await-vault-cluster.sh]
   - [/var/lib/cloud/scripts/configure-vault-audit.sh]
   - [/var/lib/cloud/scripts/configure-snapshots.sh]
   - [/var/lib/cloud/scripts/configure-autopilot.sh]

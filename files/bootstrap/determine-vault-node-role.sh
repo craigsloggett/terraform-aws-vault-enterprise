@@ -2,80 +2,80 @@
 # determine-vault-node-role.sh
 #
 # Elects the bootstrap node by lowest EC2 instance ID and publishes the
-# winner's instance ID to SSM. All nodes run this script; the winner writes
-# the parameter and the rest wait for it to appear before continuing.
+# winner's instance ID to SSM.
 
 set -euf
 
-# shellcheck source=/dev/null
+# shellcheck source=bootstrap.env.tftpl
 . /var/lib/cloud/scripts/bootstrap.env
-# shellcheck source=/dev/null
+# shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
-list_cluster_instance_ids() (
-  for attempt in 1 2 3 4 5; do
-    if result="$(
-      aws ec2 describe-instances \
-        --filters \
-        "Name=tag:${AUTO_JOIN_TAG_KEY},Values=${AUTO_JOIN_TAG_VALUE}" \
-        "Name=instance-state-name,Values=running" \
-        --query "Reservations[].Instances[].InstanceId" \
-        --output text 2>/dev/null
-    )"; then
-      printf '%s' "${result}"
-      return 0
-    fi
-    sleep 5
-  done
+bootstrap_cluster_ready() (
+  bootstrap_cluster_state="$(
+    fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}" 2>/dev/null
+  )" || bootstrap_cluster_state=""
 
-  log_error "Failed to list cluster instances after ${attempt} attempts"
-  return 1
+  [ "${bootstrap_cluster_state}" = "Ready" ]
 )
 
-is_lowest_id_node() (
-  all_ids="$(list_cluster_instance_ids)"
-  lowest_id="$(printf '%s' "${all_ids}" | tr '\t' '\n' | sort | head -1)"
+is_bootstrap_node() (
+  cluster_instance_ids="$1"
 
-  [ "${INSTANCE_ID}" = "${lowest_id}" ]
+  lowest_instance_id="$(
+    printf '%s' "${cluster_instance_ids}" |
+      tr '\t' '\n' | sort | head -1
+  )"
+
+  [ "${INSTANCE_ID}" = "${lowest_instance_id}" ]
 )
 
-wait_for_bootstrap_election() (
-  log_info "Waiting for bootstrap node election to complete"
+bootstrap_instance_id_published() (
+  bootstrap_instance_id="$(
+    fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" 2>/dev/null
+  )" || return 1
 
-  # 60 attempts x 5s = 5 minutes.
-  max_attempts=60
-  attempt=0
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    attempt=$((attempt + 1))
+  [ -n "${bootstrap_instance_id}" ] || return 1
+  [ "${bootstrap_instance_id}" != "Uninitialized" ] || return 1
 
-    bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_NAME}" 2>/dev/null)" || bootstrap_id=""
-    if [ -n "${bootstrap_id}" ] && [ "${bootstrap_id}" != "Uninitialized" ]; then
-      log_info "Bootstrap node is ${bootstrap_id}"
-      return 0
-    fi
+  return 0
+)
 
-    log_info "Bootstrap node not yet elected (attempt ${attempt}/${max_attempts}), waiting"
-    sleep 5
-  done
+claim_bootstrap_role() (
+  log_info "================================================================"
+  log_info ""
+  log_info "             This Vault node won bootstrap election             "
+  log_info ""
+  log_info "================================================================"
+  log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
 
-  log_error "Timed out after ${max_attempts} attempts waiting for bootstrap election"
-  return 1
+  put_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" "${INSTANCE_ID}"
+)
+
+await_bootstrap_election() (
+  log_info "Waiting for bootstrap election to be published to SSM"
+
+  timeout_seconds=1200
+  retry_for "${timeout_seconds}" bootstrap_instance_id_published ||
+    {
+      log_error "Bootstrap election not published after ${timeout_seconds}s"
+      return 1
+    }
 )
 
 main() {
-  cluster_state="$(fetch_parameter "${BOOTSTRAP_CLUSTER_STATE_NAME}" 2>/dev/null)" || cluster_state=""
-
-  if [ "${cluster_state}" = "Ready" ]; then
+  if bootstrap_cluster_ready; then
     log_info "Cluster already initialized, skipping bootstrap election"
     return 0
   fi
 
-  if is_lowest_id_node; then
-    log_info "This node (${INSTANCE_ID}) won bootstrap election, publishing to SSM"
-    put_parameter "${BOOTSTRAP_NODE_ID_NAME}" "${INSTANCE_ID}"
+  cluster_instance_ids="$(fetch_instance_ids_with_tag "${AUTO_JOIN_TAG_KEY}" "${AUTO_JOIN_TAG_VALUE}")"
+
+  if is_bootstrap_node "${cluster_instance_ids}"; then
+    claim_bootstrap_role
   else
-    wait_for_bootstrap_election
+    await_bootstrap_election
   fi
 }
 
-main "${@}"
+main "$@"

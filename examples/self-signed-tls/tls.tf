@@ -29,11 +29,11 @@ resource "tls_self_signed_cert" "root_ca" {
 
 data "aws_region" "this" {}
 
-resource "terraform_data" "wait_for_csr" {
+resource "terraform_data" "await_csr" {
   input = module.vault.vault_pki_intermediate_ca_csr_ssm_parameter_name
 
   provisioner "local-exec" {
-    command = "${path.module}/files/wait-for-csr.sh"
+    command = "${path.module}/files/await-csr.sh"
     environment = {
       PARAMETER_NAME = self.input
       TIMEOUT_SEC    = "1800"
@@ -45,7 +45,7 @@ resource "terraform_data" "wait_for_csr" {
 data "aws_ssm_parameter" "vault_pki_intermediate_ca_csr" {
   name = module.vault.vault_pki_intermediate_ca_csr_ssm_parameter_name
 
-  depends_on = [terraform_data.wait_for_csr]
+  depends_on = [terraform_data.await_csr]
 }
 
 resource "tls_locally_signed_cert" "vault_pki_signed_intermediate_ca" {
@@ -65,7 +65,7 @@ resource "tls_locally_signed_cert" "vault_pki_signed_intermediate_ca" {
 resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" {
   secret_id = module.vault.vault_pki_signed_intermediate_ca_secret_arn
   secret_string = jsonencode({
-    certificate = tls_locally_signed_cert.vault_pki_signed_intermediate_ca.cert_pem
-    ca_chain    = tls_self_signed_cert.root_ca.cert_pem
+    signed_intermediate_ca_pem = tls_locally_signed_cert.vault_pki_signed_intermediate_ca.cert_pem
+    ca_chain_pem               = tls_self_signed_cert.root_ca.cert_pem
   })
 }

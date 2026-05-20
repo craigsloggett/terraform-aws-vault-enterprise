@@ -9,117 +9,156 @@
 
 set -euf
 
-# shellcheck source=/dev/null
+# shellcheck source=bootstrap.env.tftpl
 . /var/lib/cloud/scripts/bootstrap.env
-# shellcheck source=/dev/null
+# shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
-readonly VAULT_DATA_DIR="/var/opt/vault"
-readonly VAULT_LOG_DIR="/var/log/vault"
-readonly VAULT_RAFT_DIR="${VAULT_DATA_DIR}/data"
+readonly VAULT_AUDIT_LOG_DIR="/var/log/vault"
+readonly VAULT_RAFT_DATA_DIR="/var/opt/vault/data"
 
-get_ebs_nvme_device() (
-  target_name="${1}"
+scan_ebs_nvme_block_device_path() (
+  ebs_attachment_name_basename="$1"
 
-  target_short="${target_name#/dev/}"
-
-  # Temporarily disable noglob for the /dev/nvme* glob scan.
+  # Globbing is disabled by `set -f`; re-enable for the glob below. Safe to
+  # leave unrestored since this is a ( ) subshell.
   set +f
-  for nvme in /dev/nvme*n1; do
-    [ -e "${nvme}" ] || continue
+  for nvme_block_device_path in /dev/nvme*n1; do
+    [ -b "${nvme_block_device_path}" ] || continue
 
-    attached="$(ebsnvme-id -b "${nvme}" 2>/dev/null)" || continue
-    attached_short="${attached#/dev/}"
+    reported_ebs_attachment_name="$(ebsnvme-id -b "${nvme_block_device_path}" 2>/dev/null)" || continue
+    [ "${reported_ebs_attachment_name##*/}" = "${ebs_attachment_name_basename}" ] || continue
 
-    if [ "${attached_short}" = "${target_short}" ]; then
-      set -f
-      printf '%s' "${nvme}"
-      return 0
-    fi
+    printf '%s' "${nvme_block_device_path}"
+    return 0
   done
-  set -f
 
   return 1
 )
 
-wait_for_ebs_nvme_device() (
-  device_attachment_name="${1}"
+resolve_ebs_nvme_block_device_path() (
+  ebs_attachment_name="$1"
+  ebs_attachment_name_basename="${ebs_attachment_name##*/}"
 
-  log_info "Waiting for NVMe device for attachment ${device_attachment_name}"
+  timeout_seconds=1200
+  if retry_for "${timeout_seconds}" \
+    scan_ebs_nvme_block_device_path "${ebs_attachment_name_basename}"; then
+    return 0
+  fi
 
-  interval=5
-  max_attempts=5
-  attempt=0
-
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    attempt=$((attempt + 1))
-    if get_ebs_nvme_device "${device_attachment_name}" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep "${interval}"
-  done
-
-  log_error "NVMe device for attachment ${device_attachment_name} did not appear after ${max_attempts} attempts"
+  log_error "NVMe device for attachment ${ebs_attachment_name} did not appear after ${timeout_seconds}s"
   return 1
 )
 
-prepare_disk() (
-  device="${1}"
-  mount_point="${2}"
-  fs_label="${3}"
+validate_xfs_label() (
+  filesystem_label="$1"
 
-  if [ "${#fs_label}" -gt 12 ]; then
-    log_error "XFS labels must be 12 characters or fewer: ${fs_label}"
+  [ "${#filesystem_label}" -le 12 ] && return 0
+
+  log_error "XFS labels must be 12 characters or fewer: ${filesystem_label}"
+  return 1
+)
+
+format_block_device() (
+  block_device_path="$1"
+  filesystem_label="$2"
+
+  existing_filesystem_type="$(blkid -p -s TYPE -o value "${block_device_path}" 2>/dev/null)" || true
+
+  if [ -z "${existing_filesystem_type}" ]; then
+    mkfs.xfs -L "${filesystem_label}" "${block_device_path}" >/dev/null ||
+      {
+        log_error "mkfs.xfs failed on ${block_device_path}"
+        return 1
+      }
+  elif [ "${existing_filesystem_type}" = "xfs" ]; then
+    : # XFS filesystem already present, do nothing.
+  else
+    log_error "Refusing to format ${block_device_path}: unexpected content (type=${existing_filesystem_type})"
     return 1
   fi
 
-  if ! blkid -p "${device}" >/dev/null 2>&1; then
-    log_info "No filesystem on ${device}, formatting as xfs (label=${fs_label})"
-    mkfs.xfs -L "${fs_label}" "${device}" >/dev/null
-  else
-    log_info "Filesystem already present on ${device}, skipping format"
-  fi
+  return 0
+)
+
+mount_block_device() (
+  block_device_path="$1"
+  mount_point="$2"
 
   if ! mountpoint -q "${mount_point}"; then
-    log_info "Mounting ${device} at ${mount_point}"
     mkdir -p "${mount_point}"
-    mount -t xfs "${device}" "${mount_point}"
-  else
-    log_info "${mount_point} already mounted, skipping"
+    mount -t xfs "${block_device_path}" "${mount_point}" ||
+      {
+        log_error "Failed to mount ${block_device_path} at ${mount_point}"
+        return 1
+      }
   fi
 
-  uuid="$(blkid -s UUID -o value "${device}")"
-  if ! grep -qE "^UUID=${uuid}[[:blank:]]" /etc/fstab; then
+  mountpoint -q "${mount_point}" ||
+    {
+      log_error "${mount_point} is not a mountpoint after mount step"
+      return 1
+    }
+)
+
+ensure_fstab_entry() (
+  block_device_path="$1"
+  mount_point="$2"
+
+  filesystem_uuid="$(blkid -s UUID -o value "${block_device_path}")" || true
+  if [ -z "${filesystem_uuid}" ]; then
+    log_error "Could not read UUID from ${block_device_path}"
+    return 1
+  fi
+
+  if ! grep -qE "^UUID=${filesystem_uuid}[[:blank:]]" /etc/fstab; then
     printf 'UUID=%s  %s  xfs  defaults,nofail  0  2\n' \
-      "${uuid}" "${mount_point}" \
+      "${filesystem_uuid}" \
+      "${mount_point}" \
       >>/etc/fstab
-    log_info "Added fstab entry for UUID=${uuid}"
   fi
 )
 
-configure_vault_mount_directories() (
-  # Mount-point ownership must be set after prepare_disk overlays the volume,
-  # otherwise the settings apply to the underlying directory and are hidden
-  # by the mount.
-  log_info "Setting ownership and permissions on Vault mount directories"
+prepare_ebs_volume() (
+  block_device_path="$1"
+  mount_point="$2"
+  filesystem_label="$3"
 
-  chown vault:vault "${VAULT_RAFT_DIR}"
-  chmod 700 "${VAULT_RAFT_DIR}"
+  validate_xfs_label "${filesystem_label}"
+  format_block_device "${block_device_path}" "${filesystem_label}"
+  mount_block_device "${block_device_path}" "${mount_point}"
+  ensure_fstab_entry "${block_device_path}" "${mount_point}"
+)
 
-  chown vault:vault "${VAULT_LOG_DIR}"
-  chmod 755 "${VAULT_LOG_DIR}"
+set_ownership_and_permissions() (
+  mountpoint -q "${VAULT_RAFT_DATA_DIR}" ||
+    {
+      log_error "${VAULT_RAFT_DATA_DIR} not mounted; refusing to chown underlying directory"
+      return 1
+    }
+  mountpoint -q "${VAULT_AUDIT_LOG_DIR}" ||
+    {
+      log_error "${VAULT_AUDIT_LOG_DIR} not mounted; refusing to chown underlying directory"
+      return 1
+    }
+
+  chown vault:vault "${VAULT_RAFT_DATA_DIR}"
+  chmod 700 "${VAULT_RAFT_DATA_DIR}"
+
+  chown vault:vault "${VAULT_AUDIT_LOG_DIR}"
+  chmod 755 "${VAULT_AUDIT_LOG_DIR}"
 )
 
 main() {
-  wait_for_ebs_nvme_device "${EBS_RAFT_DEVICE_NAME}"
-  raft_device="$(get_ebs_nvme_device "${EBS_RAFT_DEVICE_NAME}")"
-  prepare_disk "${raft_device}" "${VAULT_RAFT_DIR}" "vault-raft"
+  # Vault Raft Data
+  vault_raft_data_nvme_block_device_path="$(resolve_ebs_nvme_block_device_path "${VAULT_RAFT_DATA_EBS_ATTACHMENT_NAME}")"
+  prepare_ebs_volume "${vault_raft_data_nvme_block_device_path}" "${VAULT_RAFT_DATA_DIR}" "vault-raft"
 
-  wait_for_ebs_nvme_device "${EBS_AUDIT_DEVICE_NAME}"
-  audit_device="$(get_ebs_nvme_device "${EBS_AUDIT_DEVICE_NAME}")"
-  prepare_disk "${audit_device}" "${VAULT_LOG_DIR}" "vault-audit"
+  # Vault Audit Log
+  vault_audit_log_nvme_block_device_path="$(resolve_ebs_nvme_block_device_path "${VAULT_AUDIT_LOG_EBS_ATTACHMENT_NAME}")"
+  prepare_ebs_volume "${vault_audit_log_nvme_block_device_path}" "${VAULT_AUDIT_LOG_DIR}" "vault-audit"
 
-  configure_vault_mount_directories
+  set_ownership_and_permissions
 }
 
-main "${@}"
+main "$@"

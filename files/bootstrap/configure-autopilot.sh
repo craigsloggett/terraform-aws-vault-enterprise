@@ -6,16 +6,15 @@
 
 set -euf
 
-# shellcheck source=/dev/null
+# shellcheck source=bootstrap.env.tftpl
 . /var/lib/cloud/scripts/bootstrap.env
-# shellcheck source=/dev/null
+# shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
 main() {
-  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_NAME}")"
+  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
 
-  if [ "${INSTANCE_ID}" != "${bootstrap_id}" ]; then
-    log_info "Not the bootstrap node, skipping autopilot configuration"
+  if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
     return 0
   fi
 
@@ -33,4 +32,4 @@ main() {
     -min-quorum="${VAULT_AUTOPILOT_MIN_QUORUM}"
 }
 
-main "${@}"
+main "$@"

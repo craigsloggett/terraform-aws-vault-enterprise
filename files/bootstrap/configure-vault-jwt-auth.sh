@@ -11,9 +11,9 @@
 
 set -euf
 
-# shellcheck source=/dev/null
+# shellcheck source=bootstrap.env.tftpl
 . /var/lib/cloud/scripts/bootstrap.env
-# shellcheck source=/dev/null
+# shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
 readonly VAULT_POLICY_DIR="/etc/vault.d/policies"
@@ -23,46 +23,52 @@ readonly TMPDIR_SESSION
 trap 'rm -rf "${TMPDIR_SESSION}"' EXIT INT TERM HUP
 
 enable_jwt_auth_method() (
-  log_info "Enabling Vault JWT auth method"
+  log_info "Enabling the JWT auth method at: ${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/"
 
   if ! vault auth list -format=json | jq -e ".\"${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/\"" >/dev/null 2>&1; then
     vault auth enable -path="${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}" -description="authenticates HCP Terraform workspace runs via workload identity" jwt
   fi
 )
 
-write_jwt_auth_config() (
-  # $@ = optional extra arg, "oidc_discovery_ca_pem=@..."
-  vault write "auth/${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/config" \
-    "oidc_discovery_url=https://${VAULT_AUTH_JWT_HCP_TERRAFORM_HOSTNAME}" \
-    "bound_issuer=https://${VAULT_AUTH_JWT_HCP_TERRAFORM_HOSTNAME}" \
-    "${@}" \
-    >/dev/null
+write_oidc_discovery_ca_pem_file() (
+  oidc_discovery_ca_pem_file="$1"
+
+  log_info "Writing custom OIDC discovery CA PEM file for the JWT auth method configuration"
+
+  printf '%s' "${VAULT_AUTH_JWT_HCP_TERRAFORM_OIDC_DISCOVERY_CA_PEM}" >"${oidc_discovery_ca_pem_file}"
 )
 
 configure_jwt_auth_method() (
-  log_info "Configuring JWT auth method for HCP Terraform"
+  # $@ is an optional extra argument: "oidc_discovery_ca_pem=@..."
 
-  # Handle the case when HCP Terraform Enterprise (TFE) uses a custom
-  # or self-signed CA certificate.
-  if [ -n "${VAULT_AUTH_JWT_HCP_TERRAFORM_OIDC_DISCOVERY_CA_PEM:-}" ]; then
-    ca_pem_file="${TMPDIR_SESSION}/jwt_oidc_discovery_ca.pem"
-    printf '%s' "${VAULT_AUTH_JWT_HCP_TERRAFORM_OIDC_DISCOVERY_CA_PEM}" >"${ca_pem_file}"
-    write_jwt_auth_config "oidc_discovery_ca_pem=@${ca_pem_file}"
-  else
-    write_jwt_auth_config
-  fi
+  log_info "Configuring the JWT auth method at: ${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/"
+
+  vault write "auth/${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/config" \
+    "oidc_discovery_url=https://${VAULT_AUTH_JWT_HCP_TERRAFORM_HOSTNAME}" \
+    "bound_issuer=https://${VAULT_AUTH_JWT_HCP_TERRAFORM_HOSTNAME}" \
+    "$@" \
+    >/dev/null
 )
 
-bind_admin_jwt_role() (
-  log_info "Binding ${VAULT_AUTH_JWT_HCP_TERRAFORM_ROLE_NAME} JWT role"
+configure_jwt_auth_method_admin_policy() (
+  log_info "Configuring the JWT auth method policy: admin"
+
+  vault policy write admin "${VAULT_POLICY_DIR}/admin.hcl"
+)
+
+configure_jwt_auth_method_role() (
+  log_info "Generating bound_claims for the JWT auth method role: ${VAULT_AUTH_JWT_HCP_TERRAFORM_ROLE_NAME}"
 
   bound_claims="\"terraform_organization_name\": \"${VAULT_AUTH_JWT_HCP_TERRAFORM_ORGANIZATION_NAME}\""
+
   if [ -n "${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}" ]; then
     bound_claims="${bound_claims}, \"terraform_workspace_id\": \"${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}\""
-    log_info "Scoping JWT role to workspace ${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}"
+    log_info "Scoping JWT role to workspace: ${VAULT_AUTH_JWT_HCP_TERRAFORM_WORKSPACE_ID}"
   else
-    log_info "Scoping JWT role to organization ${VAULT_AUTH_JWT_HCP_TERRAFORM_ORGANIZATION_NAME} (all workspaces)"
+    log_info "Scoping JWT role to organization: ${VAULT_AUTH_JWT_HCP_TERRAFORM_ORGANIZATION_NAME}"
   fi
+
+  log_info "Configuring the JWT auth method role: ${VAULT_AUTH_JWT_HCP_TERRAFORM_ROLE_NAME}"
 
   vault write "auth/${VAULT_AUTH_JWT_HCP_TERRAFORM_MOUNT_PATH}/role/${VAULT_AUTH_JWT_HCP_TERRAFORM_ROLE_NAME}" - >/dev/null <<EOF
 {
@@ -80,10 +86,9 @@ EOF
 )
 
 main() {
-  bootstrap_id="$(fetch_parameter "${BOOTSTRAP_NODE_ID_NAME}")"
+  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
 
-  if [ "${INSTANCE_ID}" != "${bootstrap_id}" ]; then
-    log_info "Not the bootstrap node, skipping JWT auth configuration"
+  if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
     return 0
   fi
 
@@ -92,19 +97,24 @@ main() {
     return 0
   fi
 
-  log_info "Configuring Vault JWT auth method for HCP Terraform"
-
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
   export VAULT_CACERT="/opt/vault/tls/ca.crt"
   VAULT_TOKEN="$(fetch_secret "${ROOT_TOKEN_SECRET_ARN}")"
   export VAULT_TOKEN
 
-  vault policy write admin "${VAULT_POLICY_DIR}/admin.hcl"
-
   enable_jwt_auth_method
-  configure_jwt_auth_method
-  bind_admin_jwt_role
+
+  if [ -n "${VAULT_AUTH_JWT_HCP_TERRAFORM_OIDC_DISCOVERY_CA_PEM:-}" ]; then
+    oidc_discovery_ca_pem_file="${TMPDIR_SESSION}/jwt_oidc_discovery_ca.pem"
+    write_oidc_discovery_ca_pem_file "${oidc_discovery_ca_pem_file}"
+    configure_jwt_auth_method "oidc_discovery_ca_pem=@${oidc_discovery_ca_pem_file}"
+  else
+    configure_jwt_auth_method
+  fi
+
+  configure_jwt_auth_method_admin_policy
+  configure_jwt_auth_method_role
 }
 
-main "${@}"
+main "$@"
