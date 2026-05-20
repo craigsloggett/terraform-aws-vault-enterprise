@@ -186,7 +186,7 @@ vault_pki_ready() (
 await_vault_pki_ready() (
   log_info "Waiting for the bootstrap node to finish PKI setup"
 
-  timeout_seconds=60
+  timeout_seconds=20
   retry_for "${timeout_seconds}" vault_pki_ready ||
     {
       log_error "PKI not ready after ${timeout_seconds}s"

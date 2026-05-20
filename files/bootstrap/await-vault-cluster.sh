@@ -23,7 +23,7 @@ vault_cluster_ready() (
 await_vault_cluster() (
   log_info "Waiting for the Vault cluster to be initialized"
 
-  timeout_seconds=60
+  timeout_seconds=20
   if retry_for "${timeout_seconds}" vault_cluster_ready; then
     return 0
   fi
@@ -53,7 +53,7 @@ vault_unsealed() (
 await_vault_unseal() (
   log_info "Waiting for the local Vault node to be unsealed"
 
-  timeout_seconds=60
+  timeout_seconds=20
   retry_for "${timeout_seconds}" vault_unsealed ||
     {
       log_error "Vault did not unseal after ${timeout_seconds}s"
@@ -82,7 +82,7 @@ raft_replication_ready() (
 await_raft_replication() (
   log_info "Waiting for this local Vault node to catch up on Raft replication"
 
-  timeout_seconds=60
+  timeout_seconds=20
   retry_for "${timeout_seconds}" raft_replication_ready ||
     {
       log_error "Raft did not catch up after ${timeout_seconds}s"

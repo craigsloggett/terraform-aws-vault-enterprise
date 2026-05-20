@@ -20,8 +20,8 @@ retry_for() (
   timeout_seconds="$1"
   shift 1
 
-  elapsed=0
   interval=5
+  elapsed=0
 
   while [ "${elapsed}" -lt "${timeout_seconds}" ]; do
     if "$@"; then

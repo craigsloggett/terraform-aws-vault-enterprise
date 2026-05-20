@@ -5,7 +5,7 @@ set -ef
 : "${TIMEOUT_SEC:?TIMEOUT_SEC is required}"
 : "${REGION:?REGION is required}"
 
-interval=10
+interval=5
 elapsed=0
 
 while [ "${elapsed}" -lt "${TIMEOUT_SEC}" ]; do
