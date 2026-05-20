@@ -24,18 +24,18 @@ main() {
 
   case "${vault_cluster_state}:${vault_pki_state}" in
     Ready:Ready)
-      log_info "Appending PKI CA bundle to bootstrap CA file"
+      log_info "Appending Vault PKI CA bundle to bootstrap CA found here: ${VAULT_TLS_CA_FILE}"
       fetch_parameter "${VAULT_PKI_CA_CHAIN_SSM_PARAMETER_NAME}" >>"${VAULT_TLS_CA_FILE}"
       ;;
     Ready:*)
-      log_info "Vault cluster Ready but PKI not Ready, keeping bootstrap CA only"
+      log_info "Using bootstrap CA found here: ${VAULT_TLS_CA_FILE}"
       ;;
     *:Ready)
       log_error "Corrupt SSM state: pki/state=Ready but cluster/state='${vault_cluster_state}'"
       return 1
       ;;
     *)
-      log_info "Vault cluster not Ready, keeping bootstrap CA only"
+      log_info "Using bootstrap CA found here: ${VAULT_TLS_CA_FILE}"
       ;;
   esac
 }
