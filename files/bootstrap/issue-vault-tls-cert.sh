@@ -53,7 +53,6 @@ EOF
 
   tmp_vault_tls_cert_file="${TMPDIR_SESSION}/server.crt"
   tmp_vault_tls_key_file="${TMPDIR_SESSION}/server.key"
-
   {
     printf '%s' "${vault_pki_issue_response}" | jq -r '.data.certificate'
     printf '%s' "${vault_pki_issue_response}" | jq -r '.data.ca_chain[]'

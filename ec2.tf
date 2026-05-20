@@ -112,7 +112,7 @@ resource "aws_launch_template" "vault_enterprise" {
     script_common_functions                    = file("${path.module}/files/bootstrap/common-functions.sh")
     script_determine_vault_node_role           = file("${path.module}/files/bootstrap/determine-vault-node-role.sh")
     script_install_vault                       = file("${path.module}/files/bootstrap/install-vault.sh")
-    script_write_vault_license                 = file("${path.module}/files/bootstrap/write-vault-license.sh")
+    script_install_vault_enterprise_license    = file("${path.module}/files/bootstrap/install-vault-enterprise-license.sh")
     script_write_vault_bootstrap_tls_materials = file("${path.module}/files/bootstrap/write-vault-bootstrap-tls-materials.sh")
     script_prepare_vault_storage               = file("${path.module}/files/bootstrap/prepare-vault-storage.sh")
     script_start_vault                         = file("${path.module}/files/bootstrap/start-vault.sh")

@@ -53,11 +53,11 @@ write_files:
     content: |
       ${indent(6, script_install_vault)}
 
-  - path: /var/lib/cloud/scripts/write-vault-license.sh
+  - path: /var/lib/cloud/scripts/install-vault-enterprise-license.sh
     owner: root:root
     permissions: '0755'
     content: |
-      ${indent(6, script_write_vault_license)}
+      ${indent(6, script_install_vault_enterprise_license)}
 
   - path: /var/lib/cloud/scripts/write-vault-bootstrap-tls-materials.sh
     owner: root:root
