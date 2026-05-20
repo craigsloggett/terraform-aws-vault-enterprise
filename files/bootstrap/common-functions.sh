@@ -77,7 +77,7 @@ fetch_secret_no_retry() (
 fetch_secret() (
   secret_id="$1"
 
-  timeout_seconds=20
+  timeout_seconds=1200
   if retry_for "${timeout_seconds}" \
     fetch_secret_no_retry "${secret_id}"; then
     return 0
@@ -121,7 +121,7 @@ fetch_instance_ids_with_tag() (
   tag_key="$1"
   tag_value="$2"
 
-  timeout_seconds=20
+  timeout_seconds=1200
   if retry_for "${timeout_seconds}" \
     scan_instance_ids_with_tag "${tag_key}" "${tag_value}"; then
     return 0

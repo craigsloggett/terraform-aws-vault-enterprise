@@ -40,7 +40,7 @@ resolve_ebs_nvme_block_device_path() (
   ebs_attachment_name="$1"
   ebs_attachment_name_basename="${ebs_attachment_name##*/}"
 
-  timeout_seconds=20
+  timeout_seconds=1200
   if retry_for "${timeout_seconds}" \
     scan_ebs_nvme_block_device_path "${ebs_attachment_name_basename}"; then
     return 0
