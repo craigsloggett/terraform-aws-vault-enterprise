@@ -75,7 +75,9 @@ raft_replication_ready() (
   [ "${raft_committed_index}" -gt 0 ] || return 1
   [ "${raft_applied_index}" -ge "${raft_committed_index}" ] || return 1
 
-  log_info "Raft replication is ready (raft_applied_index=${raft_applied_index} raft_committed_index=${raft_committed_index})"
+  log_info "Raft replication is ready:"
+  log_info "   raft_applied_index=${raft_applied_index}"
+  log_info " raft_committed_index=${raft_committed_index}"
   return 0
 )
 
