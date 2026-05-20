@@ -1,5 +1,5 @@
 #!/bin/sh
-# wait-for-vault-cluster.sh
+# await-vault-cluster.sh
 #
 # Waits for the Vault cluster to be initialized (cluster_state=Ready in SSM)
 # and for the local vault.service to be unsealed by KMS auto-unseal. Runs
