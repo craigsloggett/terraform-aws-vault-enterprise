@@ -24,7 +24,7 @@ main() {
 
   case "${vault_cluster_state}:${vault_pki_state}" in
     Ready:Ready)
-      log_info "Appending Vault PKI CA bundle to bootstrap CA found here: ${VAULT_TLS_CA_FILE}"
+      log_info "Appending Vault PKI CA chain to bootstrap CA found here: ${VAULT_TLS_CA_FILE}"
       fetch_parameter "${VAULT_PKI_CA_CHAIN_SSM_PARAMETER_NAME}" >>"${VAULT_TLS_CA_FILE}"
       ;;
     Ready:*)

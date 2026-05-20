@@ -20,7 +20,7 @@ readonly TMPDIR_SESSION
 trap 'rm -rf "${TMPDIR_SESSION}"' EXIT INT TERM HUP
 
 enable_vault_pki_secrets_engine() (
-  log_info "Enabling Vault PKI secrets engine"
+  log_info "Enabling the Vault PKI secrets engine"
 
   if ! vault secrets list -format=json | jq -e --arg path "${VAULT_PKI_MOUNT_PATH}/" '.[$path]' >/dev/null 2>&1; then
     vault secrets enable -path="${VAULT_PKI_MOUNT_PATH}" -description="issues TLS leaf certificates for Vault cluster nodes" pki
@@ -44,7 +44,7 @@ EOF
 generate_vault_pki_intermediate_ca() (
   intermediate_ca_response_file="$1"
 
-  log_info "Generating Vault PKI intermediate CA"
+  log_info "Generating the Vault PKI intermediate CA"
 
   intermediate_ca_payload="$(
     jq -nc \
@@ -70,7 +70,7 @@ extract_vault_pki_intermediate_ca_csr() (
 publish_vault_pki_intermediate_ca_csr() (
   vault_pki_intermediate_ca_csr="$1"
 
-  log_info "Publishing Vault PKI intermediate CA CSR to ${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}"
+  log_info "Publishing the Vault PKI intermediate CA CSR to SSM parameter: ${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}"
 
   put_parameter "${VAULT_PKI_INTERMEDIATE_CA_CSR_SSM_PARAMETER_NAME}" "${vault_pki_intermediate_ca_csr}"
 )
@@ -84,7 +84,7 @@ signed_vault_pki_intermediate_ca_available() (
 )
 
 await_signed_vault_pki_intermediate_ca() (
-  log_info "Waiting for signed Vault PKI intermediate CA"
+  log_info "Waiting for the signed Vault PKI intermediate CA"
 
   timeout_seconds="${VAULT_PKI_SIGNED_INTERMEDIATE_WAIT_TIMEOUT_SECONDS}"
   retry_for "${timeout_seconds}" signed_vault_pki_intermediate_ca_available ||
@@ -97,7 +97,7 @@ await_signed_vault_pki_intermediate_ca() (
 validate_signed_vault_pki_intermediate_ca() (
   signed_vault_pki_intermediate_ca="$1"
 
-  log_info "Validating signed Vault PKI intermediate CA"
+  log_info "Validating the signed Vault PKI intermediate CA"
 
   if printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -e 'has("private_key")' >/dev/null 2>&1; then
     log_error "Signed Vault PKI intermediate CA contains a private_key field, aborting"
@@ -116,7 +116,7 @@ validate_signed_vault_pki_intermediate_ca() (
 import_signed_vault_pki_intermediate_ca() (
   signed_vault_pki_intermediate_ca="$1"
 
-  log_info "Importing signed Vault PKI intermediate CA"
+  log_info "Importing the signed Vault PKI intermediate CA"
 
   intermediate_ca_set_signed_payload="$(
     printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}'
@@ -136,7 +136,7 @@ EOF
 )
 
 configure_vault_pki_role() (
-  log_info "Configuring Vault PKI role"
+  log_info "Configuring the Vault PKI role: vault-server"
 
   vault write "${VAULT_PKI_MOUNT_PATH}/roles/vault-server" - >/dev/null <<EOF
 {
@@ -159,7 +159,7 @@ EOF
 )
 
 publish_vault_pki_ca_chain() (
-  log_info "Publishing Vault PKI CA chain to ${VAULT_PKI_CA_CHAIN_SSM_PARAMETER_NAME}"
+  log_info "Publishing the Vault PKI CA chain to SSM parameter: ${VAULT_PKI_CA_CHAIN_SSM_PARAMETER_NAME}"
 
   vault_pki_ca_chain="$(
     vault read -format=json "${VAULT_PKI_MOUNT_PATH}/issuer/default/json" |
@@ -170,7 +170,7 @@ publish_vault_pki_ca_chain() (
 )
 
 publish_vault_pki_state() (
-  log_info "Publishing Vault PKI state to ${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}"
+  log_info "Publishing Vault PKI state to SSM parameter: ${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}"
 
   put_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}" "Ready"
 )
@@ -184,12 +184,12 @@ vault_pki_ready() (
 )
 
 await_vault_pki_ready() (
-  log_info "Waiting for the bootstrap node to finish PKI setup"
+  log_info "Waiting for the bootstrap node to finish Vault PKI setup"
 
   timeout_seconds=1200
   retry_for "${timeout_seconds}" vault_pki_ready ||
     {
-      log_error "PKI not ready after ${timeout_seconds}s"
+      log_error "Vault PKI not ready after ${timeout_seconds}s"
       return 1
     }
 )

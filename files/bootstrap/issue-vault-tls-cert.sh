@@ -23,7 +23,7 @@ readonly TMPDIR_SESSION
 trap 'rm -rf "${TMPDIR_SESSION}"' EXIT INT TERM HUP
 
 issue_vault_pki_tls_certificate_and_key() (
-  log_info "Issuing Vault PKI TLS certificate and private key"
+  log_info "Issuing the Vault PKI TLS certificate and private key"
 
   export VAULT_ADDR="https://127.0.0.1:8200"
   export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
@@ -41,7 +41,7 @@ issue_vault_pki_tls_certificate_and_key() (
   )"
   export VAULT_TOKEN="${vault_token}"
 
-  log_info "Requesting certificate from PKI engine"
+  log_info "Requesting a certificate from the Vault PKI engine"
   vault_pki_issue_response="$(
     vault write -format=json "${VAULT_PKI_MOUNT_PATH}/issue/${vault_pki_role}" - <<EOF
 {
@@ -68,24 +68,24 @@ EOF
   mv "${VAULT_TLS_DIR}/server.crt.tmp" "${VAULT_TLS_CERT_FILE}"
   mv "${VAULT_TLS_DIR}/server.key.tmp" "${VAULT_TLS_KEY_FILE}"
 
-  log_info "Vault PKI TLS certificate and private key written to ${VAULT_TLS_CERT_FILE}"
+  log_info "Vault PKI TLS certificate and private key written to: ${VAULT_TLS_CERT_FILE}"
 )
 
 reload_vault_listener() (
-  log_info "Reloading Vault listener with Vault PKI issued certificate"
+  log_info "Reloading Vault listener with the Vault PKI issued certificate"
 
   systemctl kill --signal=SIGHUP --kill-whom=main vault.service
 )
 
 install_vault_pki_ca_chain() (
-  log_info "Installing Vault PKI CA chain to /opt/vault/tls/ca.crt, replacing the Bootstrap CA"
+  log_info "Replacing the bootstrap CA with the Vault PKI CA chain"
 
   fetch_parameter "${VAULT_PKI_CA_CHAIN_SSM_PARAMETER_NAME}" >"${TMPDIR_SESSION}/vault-pki-ca-chain.pem"
   install -o vault -g vault -m 0644 "${TMPDIR_SESSION}/vault-pki-ca-chain.pem" "${VAULT_TLS_CA_FILE}"
 )
 
 trust_vault_pki_ca_chain() (
-  log_info "Trusting Vault PKI CA chain"
+  log_info "Running update-ca-certificates to trust the Vault PKI CA chain"
 
   install -o root -g root -m 0644 "${VAULT_TLS_CA_FILE}" /usr/local/share/ca-certificates/vault-pki-ca-chain.crt
   update-ca-certificates >/dev/null

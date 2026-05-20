@@ -14,24 +14,16 @@ set -euf
 # shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
-main() {
-  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
-
-  if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
-    return 0
-  fi
-
-  log_info "Configuring Vault AWS auth method"
-
-  export VAULT_ADDR="https://127.0.0.1:8200"
-  export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
-  export VAULT_CACERT="/opt/vault/tls/ca.crt"
-  VAULT_TOKEN="$(fetch_secret "${ROOT_TOKEN_SECRET_ARN}")"
-  export VAULT_TOKEN
+enable_aws_auth_method() (
+  log_info "Enabling the Vault AWS auth method"
 
   if ! vault auth list -format=json | jq -e '."aws/"' >/dev/null 2>&1; then
     vault auth enable -description="authenticates AWS resources via IAM identity" aws
   fi
+)
+
+configure_vault_aws_role() (
+  log_info "Configuring the Vault AWS auth role: vault-server"
 
   vault write auth/aws/role/vault-server - >/dev/null <<EOF
 {
@@ -42,6 +34,23 @@ main() {
   "ttl": "${VAULT_AWS_AUTH_ROLE_TTL}"
 }
 EOF
+)
+
+main() {
+  bootstrap_instance_id="$(fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}")"
+
+  if [ "${INSTANCE_ID}" != "${bootstrap_instance_id}" ]; then
+    return 0
+  fi
+
+  export VAULT_ADDR="https://127.0.0.1:8200"
+  export VAULT_TLS_SERVER_NAME="${VAULT_FQDN}"
+  export VAULT_CACERT="/opt/vault/tls/ca.crt"
+  VAULT_TOKEN="$(fetch_secret "${ROOT_TOKEN_SECRET_ARN}")"
+  export VAULT_TOKEN
+
+  enable_aws_auth_method
+  configure_vault_aws_role
 }
 
 main "$@"
