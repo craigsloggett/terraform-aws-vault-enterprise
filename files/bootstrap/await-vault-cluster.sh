@@ -24,12 +24,11 @@ await_vault_cluster() (
   log_info "Waiting for the Vault cluster to be initialized"
 
   timeout_seconds=1200
-  if retry_for "${timeout_seconds}" vault_cluster_ready; then
-    return 0
-  fi
-
-  log_error "Unable to join the Vault cluster after ${timeout_seconds}s"
-  return 1
+  retry_for "${timeout_seconds}" vault_cluster_ready ||
+    {
+      log_error "Unable to join the Vault cluster after ${timeout_seconds}s"
+      return 1
+    }
 )
 
 vault_unsealed() (
@@ -51,7 +50,7 @@ vault_unsealed() (
 )
 
 await_vault_unseal() (
-  log_info "Waiting for the local Vault node to be unsealed"
+  log_info "Waiting for the Vault cluster to be unsealed"
 
   timeout_seconds=1200
   retry_for "${timeout_seconds}" vault_unsealed ||
@@ -75,19 +74,16 @@ raft_replication_ready() (
   [ "${raft_committed_index}" -gt 0 ] || return 1
   [ "${raft_applied_index}" -ge "${raft_committed_index}" ] || return 1
 
-  log_info "Raft replication is ready:"
-  log_info "   raft_applied_index=${raft_applied_index}"
-  log_info " raft_committed_index=${raft_committed_index}"
   return 0
 )
 
 await_raft_replication() (
-  log_info "Waiting for this local Vault node to catch up on Raft replication"
+  log_info "Waiting for Vault Raft replication to be ready"
 
   timeout_seconds=1200
   retry_for "${timeout_seconds}" raft_replication_ready ||
     {
-      log_error "Raft did not catch up after ${timeout_seconds}s"
+      log_error "Vault Raft replicaton did not catch up after ${timeout_seconds}s"
       return 1
     }
 )
