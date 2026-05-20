@@ -83,7 +83,7 @@ await_raft_replication() (
   timeout_seconds=1200
   retry_for "${timeout_seconds}" raft_replication_ready ||
     {
-      log_error "Vault Raft replicaton did not catch up after ${timeout_seconds}s"
+      log_error "Vault Raft replication did not catch up after ${timeout_seconds}s"
       return 1
     }
 )
