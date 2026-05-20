@@ -117,7 +117,7 @@ resource "aws_launch_template" "vault_enterprise" {
     script_prepare_vault_storage               = file("${path.module}/files/bootstrap/prepare-vault-storage.sh")
     script_start_vault                         = file("${path.module}/files/bootstrap/start-vault.sh")
     script_initialize_vault_cluster            = file("${path.module}/files/bootstrap/initialize-vault-cluster.sh")
-    script_wait_for_vault_cluster              = file("${path.module}/files/bootstrap/wait-for-vault-cluster.sh")
+    script_await_vault_cluster                 = file("${path.module}/files/bootstrap/await-vault-cluster.sh")
     script_configure_vault_audit               = file("${path.module}/files/bootstrap/configure-vault-audit.sh")
     script_configure_snapshots                 = file("${path.module}/files/bootstrap/configure-snapshots.sh")
     script_configure_autopilot                 = file("${path.module}/files/bootstrap/configure-autopilot.sh")
