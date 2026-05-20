@@ -19,7 +19,7 @@ while [ "${elapsed}" -lt "${TIMEOUT_SEC}" ]; do
 
   case "${value}" in
     "" | Uninitialized)
-      printf 'Waiting for CSR at %s (%ss elapsed)...\n' "${PARAMETER_NAME}" "${elapsed}" >&2
+      printf 'Awaiting CSR at %s (%ss elapsed)...\n' "${PARAMETER_NAME}" "${elapsed}" >&2
       sleep "${interval}"
       elapsed=$((elapsed + interval))
       ;;

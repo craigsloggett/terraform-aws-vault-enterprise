@@ -101,7 +101,7 @@ resource "terraform_data" "await_csr" {
   input = module.vault.vault_pki_intermediate_ca_csr_ssm_parameter_name
 
   provisioner "local-exec" {
-    command = "${path.module}/files/wait-for-csr.sh"
+    command = "${path.module}/files/await-csr.sh"
     environment = {
       PARAMETER_NAME = self.input
       TIMEOUT_SEC    = "1800"
