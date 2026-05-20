@@ -50,12 +50,12 @@ vault_unsealed() (
 )
 
 await_vault_unseal() (
-  log_info "Waiting for the Vault cluster to be unsealed"
+  log_info "Waiting for this Vault node to be unsealed"
 
   timeout_seconds=1200
   retry_for "${timeout_seconds}" vault_unsealed ||
     {
-      log_error "Vault did not unseal after ${timeout_seconds}s"
+      log_error "Vault node did not unseal after ${timeout_seconds}s"
       return 1
     }
 )
