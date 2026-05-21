@@ -1,7 +1,7 @@
 resource "aws_ssm_parameter" "vault_pki_ca_chain" {
   name        = var.vault_pki.ssm_parameter.ca_chain_name
   type        = "String"
-  value       = "EMPTY"
+  value       = "Uninitialized"
   description = "Vault PKI CA Chain PEM"
 
   lifecycle {
