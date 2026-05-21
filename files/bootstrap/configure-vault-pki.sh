@@ -124,7 +124,12 @@ validate_signed_vault_pki_intermediate_ca() (
 
   log_info "Validating the signed Vault PKI intermediate CA"
 
-  if jq -e 'has("private_key")' <"${signed_vault_pki_intermediate_ca_file}" >/dev/null 2>&1; then
+  if ! jq empty <"${signed_vault_pki_intermediate_ca_file}" 2>/dev/null; then
+    log_error "Signed Vault PKI intermediate CA is not valid JSON: ${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
+    return 1
+  fi
+
+  if jq -e 'has("private_key")' <"${signed_vault_pki_intermediate_ca_file}" >/dev/null; then
     log_error "Signed Vault PKI intermediate CA contains a private_key field, aborting"
     return 1
   fi
