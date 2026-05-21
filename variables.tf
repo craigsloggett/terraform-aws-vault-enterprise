@@ -378,8 +378,9 @@ variable "compute" {
     }), {})
 
     autoscaling_group = optional(object({
-      name_prefix   = optional(string, "vault-enterprise-servers-")
-      instance_name = optional(string, "vault-enterprise-server")
+      name_prefix             = optional(string, "vault-enterprise-servers-")
+      instance_name           = optional(string, "vault-enterprise-server")
+      launch_template_version = optional(string, "$Default")
     }), {})
   })
 
@@ -469,6 +470,11 @@ variable "compute" {
   validation {
     condition     = var.compute.audit_disk.throughput <= var.compute.audit_disk.iops * 0.25
     error_message = "compute.audit_disk.throughput cannot exceed compute.audit_disk.iops * 0.25."
+  }
+
+  validation {
+    condition     = contains(["$Default", "$Latest"], var.compute.autoscaling_group.launch_template_version)
+    error_message = "Must be \"$Default\" or \"$Latest\"."
   }
 }
 

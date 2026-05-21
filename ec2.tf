@@ -340,7 +340,7 @@ resource "aws_autoscaling_group" "vault_enterprise" {
 
   launch_template {
     id      = aws_launch_template.vault_enterprise.id
-    version = "$Default"
+    version = var.compute.autoscaling_group.launch_template_version
   }
 
   health_check_type         = "ELB"
