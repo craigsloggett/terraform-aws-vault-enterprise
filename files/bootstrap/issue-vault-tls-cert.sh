@@ -37,6 +37,7 @@ issue_vault_pki_tls_certificate_and_key() (
       -token-only \
       -no-store \
       -method=aws \
+      header_value="${VAULT_FQDN}" \
       role="${vault_pki_role}"
   )"
   export VAULT_TOKEN="${vault_token}"

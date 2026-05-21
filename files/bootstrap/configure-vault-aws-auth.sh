@@ -25,14 +25,23 @@ enable_aws_auth_method() (
 configure_vault_aws_role() (
   log_info "Configuring the Vault AWS auth role: vault-server"
 
+  role_vault_server_payload="$(
+    jq -nc \
+      --arg bound_iam_principal_arn "${VAULT_IAM_ROLE_ARN}" \
+      --arg iam_server_id_header_value "${VAULT_FQDN}" \
+      --arg max_ttl "${VAULT_AWS_AUTH_ROLE_MAX_TTL}" \
+      --arg ttl "${VAULT_AWS_AUTH_ROLE_TTL}" \
+      '{
+        auth_type: "iam",
+        bound_iam_principal_arn: $bound_iam_principal_arn,
+        iam_server_id_header_value: $iam_server_id_header_value,
+        policies: "vault-server",
+        max_ttl: $max_ttl,
+        ttl: $ttl
+      }'
+  )"
   vault write auth/aws/role/vault-server - >/dev/null <<EOF
-{
-  "auth_type": "iam",
-  "bound_iam_principal_arn": "${VAULT_IAM_ROLE_ARN}",
-  "policies": "vault-server",
-  "max_ttl": "${VAULT_AWS_AUTH_ROLE_MAX_TTL}",
-  "ttl": "${VAULT_AWS_AUTH_ROLE_TTL}"
-}
+"${role_vault_server_payload}"
 EOF
 )
 
