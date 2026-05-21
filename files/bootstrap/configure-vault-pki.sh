@@ -1,7 +1,7 @@
 #!/bin/sh
 # configure-vault-pki.sh
 #
-# Cnfigure the Vault PKI secrets engine with an externally signed intermediate
+# Configure the Vault PKI secrets engine with an externally signed intermediate
 # CA, creates the vault-server PKI role, writes the vault-server policy,
 # publishes the PKI managed TLS CA bundle to SSM, and marks pki_state=Ready.
 # Follower nodes wait for pki_state=Ready before returning.
