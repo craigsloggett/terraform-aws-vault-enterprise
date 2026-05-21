@@ -44,7 +44,7 @@ configure_vault_pki_urls() (
   )"
 
   vault write "${VAULT_PKI_MOUNT_PATH}/config/urls" - >/dev/null <<EOF
-"${config_urls_payload}"
+${config_urls_payload}
 EOF
 )
 
@@ -193,7 +193,7 @@ configure_vault_pki_role() (
   )"
 
   vault write "${VAULT_PKI_MOUNT_PATH}/roles/vault-server" - >/dev/null <<EOF
-"${roles_vault_server_payload}"
+${roles_vault_server_payload}
 EOF
 
   vault policy write vault-server "${VAULT_POLICY_DIR}/vault-server.hcl"

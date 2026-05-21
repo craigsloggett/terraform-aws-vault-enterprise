@@ -41,7 +41,7 @@ configure_vault_aws_role() (
       }'
   )"
   vault write auth/aws/role/vault-server - >/dev/null <<EOF
-"${role_vault_server_payload}"
+${role_vault_server_payload}
 EOF
 )
 
