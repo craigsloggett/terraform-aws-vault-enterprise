@@ -92,20 +92,19 @@ resource "aws_launch_template" "vault_enterprise" {
       vault_auth_jwt_role_ttl                            = var.vault_auth.jwt.role_ttl
 
       # Vault PKI
-      vault_pki_intermediate_ca_common_name               = var.vault_pki.intermediate_ca.common_name
-      vault_pki_intermediate_ca_country                   = var.vault_pki.intermediate_ca.country
-      vault_pki_intermediate_ca_csr_ssm_parameter_name    = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
-      vault_pki_intermediate_ca_key_bits                  = var.vault_pki.intermediate_ca.key_bits
-      vault_pki_intermediate_ca_key_type                  = var.vault_pki.intermediate_ca.key_type
-      vault_pki_intermediate_ca_organization              = var.vault_pki.intermediate_ca.organization
-      vault_pki_ca_chain_ssm_parameter_name               = aws_ssm_parameter.vault_pki_ca_chain.name
-      vault_pki_mount_path                                = var.vault_pki.mount_path
-      vault_pki_server_cert_ttl                           = var.vault_pki.server_cert_ttl
-      vault_pki_signed_intermediate_ca_secret_arn         = aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
-      vault_pki_signed_intermediate_poll_interval_seconds = var.vault_pki.signed_intermediate_poll_interval_seconds
-      vault_pki_signed_intermediate_wait_timeout_seconds  = var.vault_pki.signed_intermediate_wait_timeout_seconds
-      vault_pki_vault_mount_max_ttl                       = var.vault_pki.mount_max_ttl
-      vault_pki_vault_server_role_max_ttl                 = var.vault_pki.server_role_max_ttl
+      vault_pki_intermediate_ca_common_name              = var.vault_pki.intermediate_ca.common_name
+      vault_pki_intermediate_ca_country                  = var.vault_pki.intermediate_ca.country
+      vault_pki_intermediate_ca_csr_ssm_parameter_name   = aws_ssm_parameter.vault_pki_intermediate_ca_csr.name
+      vault_pki_intermediate_ca_key_bits                 = var.vault_pki.intermediate_ca.key_bits
+      vault_pki_intermediate_ca_key_type                 = var.vault_pki.intermediate_ca.key_type
+      vault_pki_intermediate_ca_organization             = var.vault_pki.intermediate_ca.organization
+      vault_pki_ca_chain_ssm_parameter_name              = aws_ssm_parameter.vault_pki_ca_chain.name
+      vault_pki_mount_path                               = var.vault_pki.mount_path
+      vault_pki_server_cert_ttl                          = var.vault_pki.server_cert_ttl
+      vault_pki_signed_intermediate_ca_secret_arn        = aws_secretsmanager_secret.vault_pki_signed_intermediate_ca.arn
+      vault_pki_signed_intermediate_wait_timeout_seconds = var.vault_pki.signed_intermediate_wait_timeout_seconds
+      vault_pki_vault_mount_max_ttl                      = var.vault_pki.mount_max_ttl
+      vault_pki_vault_server_role_max_ttl                = var.vault_pki.server_role_max_ttl
     })
 
     # Bootstrap Scripts

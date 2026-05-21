@@ -192,12 +192,11 @@ variable "vault_auth_jwt_hcp_terraform" {
 
 variable "vault_pki" {
   type = object({
-    mount_path                                = optional(string, "pki_vault")
-    mount_max_ttl                             = optional(string, "26280h")
-    server_role_max_ttl                       = optional(string, "24h")
-    server_cert_ttl                           = optional(string, "24h")
-    signed_intermediate_poll_interval_seconds = optional(number, 10)
-    signed_intermediate_wait_timeout_seconds  = optional(number, 1800)
+    mount_path                               = optional(string, "pki_vault")
+    mount_max_ttl                            = optional(string, "26280h")
+    server_role_max_ttl                      = optional(string, "24h")
+    server_cert_ttl                          = optional(string, "24h")
+    signed_intermediate_wait_timeout_seconds = optional(number, 1800)
 
     secretsmanager_secret = optional(object({
       signed_intermediate_ca_name_prefix = optional(string, "vault-enterprise-signed-intermediate-ca-")
