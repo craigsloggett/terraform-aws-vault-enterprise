@@ -146,7 +146,7 @@ set_ownership_and_permissions() (
   chmod 700 "${VAULT_RAFT_DATA_DIR}"
 
   chown vault:vault "${VAULT_AUDIT_LOG_DIR}"
-  chmod 755 "${VAULT_AUDIT_LOG_DIR}"
+  chmod 750 "${VAULT_AUDIT_LOG_DIR}"
 )
 
 main() {
