@@ -21,7 +21,8 @@ vault_api_ready() (
   status="$(
     curl --silent --insecure --output /dev/null --write-out '%{http_code}' \
       "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null
-  )" || return 1
+  )" ||
+    return 1
 
   [ "${status}" != "000" ]
 )

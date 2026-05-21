@@ -33,10 +33,14 @@ is_bootstrap_node() (
 bootstrap_instance_id_published() (
   bootstrap_instance_id="$(
     fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" 2>/dev/null
-  )" || return 1
+  )" ||
+    return 1
 
-  [ -n "${bootstrap_instance_id}" ] || return 1
-  [ "${bootstrap_instance_id}" != "Uninitialized" ] || return 1
+  [ -n "${bootstrap_instance_id}" ] ||
+    return 1
+
+  [ "${bootstrap_instance_id}" != "Uninitialized" ] ||
+    return 1
 
   return 0
 )

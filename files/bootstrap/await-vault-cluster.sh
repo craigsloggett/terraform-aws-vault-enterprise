@@ -15,7 +15,8 @@ set -euf
 . /var/lib/cloud/scripts/common-functions.sh
 
 vault_cluster_ready() (
-  vault_cluster_state="$(fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}")" || return 1
+  vault_cluster_state="$(fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}")" ||
+    return 1
 
   [ "${vault_cluster_state}" = "Ready" ]
 )
@@ -61,18 +62,27 @@ await_vault_unseal() (
 )
 
 raft_replication_complete() (
-  vault_leader_response="$(vault read -format=json sys/leader 2>/dev/null)" || return 1
+  vault_leader_response="$(vault read -format=json sys/leader 2>/dev/null)" ||
+    return 1
 
-  [ -n "${vault_leader_response}" ] || return 1
+  [ -n "${vault_leader_response}" ] ||
+    return 1
 
   raft_committed_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_committed_index // empty')"
-  [ -n "${raft_committed_index}" ] || return 1
+
+  [ -n "${raft_committed_index}" ] ||
+    return 1
 
   raft_applied_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_applied_index // empty')"
-  [ -n "${raft_applied_index}" ] || return 1
 
-  [ "${raft_committed_index}" -gt 0 ] || return 1
-  [ "${raft_applied_index}" -ge "${raft_committed_index}" ] || return 1
+  [ -n "${raft_applied_index}" ] ||
+    return 1
+
+  [ "${raft_committed_index}" -gt 0 ] ||
+    return 1
+
+  [ "${raft_applied_index}" -ge "${raft_committed_index}" ] ||
+    return 1
 
   return 0
 )

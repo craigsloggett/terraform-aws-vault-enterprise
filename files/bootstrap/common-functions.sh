@@ -110,9 +110,11 @@ scan_instance_ids_with_tag() (
       "Name=instance-state-name,Values=running" \
       --query "Reservations[].Instances[].InstanceId" \
       --output text 2>/dev/null
-  )" || return 1
+  )" ||
+    return 1
 
-  [ -n "${result}" ] || return 1
+  [ -n "${result}" ] ||
+    return 1
 
   printf '%s' "${result}"
 )

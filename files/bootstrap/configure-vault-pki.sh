@@ -76,9 +76,11 @@ publish_vault_pki_intermediate_ca_csr() (
 )
 
 signed_vault_pki_intermediate_ca_available() (
-  signed_vault_pki_intermediate_ca="$(fetch_secret_no_retry "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")" || return 1
+  signed_vault_pki_intermediate_ca="$(fetch_secret_no_retry "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")" ||
+    return 1
 
-  [ -n "${signed_vault_pki_intermediate_ca}" ] || return 1
+  [ -n "${signed_vault_pki_intermediate_ca}" ] ||
+    return 1
 
   return 0
 )
@@ -176,9 +178,11 @@ publish_vault_pki_state() (
 )
 
 vault_pki_ready() (
-  vault_pki_state="$(fetch_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}")" || return 1
+  vault_pki_state="$(fetch_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}")" ||
+    return 1
 
-  [ "${vault_pki_state}" = "Ready" ] || return 1
+  [ "${vault_pki_state}" = "Ready" ] ||
+    return 1
 
   return 0
 )
