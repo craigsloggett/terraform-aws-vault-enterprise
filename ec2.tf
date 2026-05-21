@@ -26,10 +26,11 @@ resource "aws_instance" "bastion" {
 # Vault Nodes
 
 resource "aws_launch_template" "vault_enterprise" {
-  name_prefix   = var.compute.launch_template.name_prefix
-  image_id      = data.aws_ami.selected.id
-  instance_type = var.compute.instance_type
-  key_name      = var.key_pair.key_name
+  name_prefix            = var.compute.launch_template.name_prefix
+  image_id               = data.aws_ami.selected.id
+  instance_type          = var.compute.instance_type
+  key_name               = var.key_pair.key_name
+  update_default_version = true
 
   iam_instance_profile {
     name = aws_iam_instance_profile.vault_enterprise.name
@@ -339,7 +340,7 @@ resource "aws_autoscaling_group" "vault_enterprise" {
 
   launch_template {
     id      = aws_launch_template.vault_enterprise.id
-    version = "$Latest"
+    version = "$Default"
   }
 
   health_check_type         = "ELB"
@@ -351,11 +352,11 @@ resource "aws_autoscaling_group" "vault_enterprise" {
     strategy = "Rolling"
 
     preferences {
-      # Derived as maximum nodes that can be out during instance
-      # refresh while maintaining quorum.
-      #  floor((n-1) * 100 / n) gives:
-      #   n=3 --> 66% (1 node out, 2 healthy)
-      #   n=5 --> 80% (1 node out, 4 healthy)
+      skip_matching    = true
+      instance_warmup  = 900
+      checkpoint_delay = 300
+
+      # Replace 1 node at a time.
       min_healthy_percentage = floor(
         (var.compute.node_count - 1) * 100 / var.compute.node_count
       )
@@ -373,9 +374,4 @@ resource "aws_autoscaling_group" "vault_enterprise" {
     value               = var.compute.autoscaling_group.instance_name
     propagate_at_launch = true
   }
-
-  depends_on = [
-    aws_iam_role_policy.kms_read_write,
-    aws_iam_role_policy.secrets_manager_read,
-  ]
 }
