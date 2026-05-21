@@ -131,7 +131,7 @@ validate_signed_vault_pki_intermediate_ca() (
 
   for field in signed_intermediate_ca_pem ca_chain_pem; do
     value="$(
-      jq -r --arg field "${field}" '.[$field] // empty' \
+      jq -r --arg field "${field}" '.[$field] // ""' \
         <"${signed_vault_pki_intermediate_ca_file}"
     )"
     if [ -z "${value}" ]; then

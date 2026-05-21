@@ -68,12 +68,12 @@ raft_replication_complete() (
   [ -n "${vault_leader_response}" ] ||
     return 1
 
-  raft_committed_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_committed_index // empty')"
+  raft_committed_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_committed_index // ""')"
 
   [ -n "${raft_committed_index}" ] ||
     return 1
 
-  raft_applied_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_applied_index // empty')"
+  raft_applied_index="$(printf '%s' "${vault_leader_response}" | jq -r '.data.raft_applied_index // ""')"
 
   [ -n "${raft_applied_index}" ] ||
     return 1
