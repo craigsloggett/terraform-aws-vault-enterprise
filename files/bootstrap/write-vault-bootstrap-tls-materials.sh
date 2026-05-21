@@ -19,8 +19,15 @@ set -euf
 readonly VAULT_TLS_CA_FILE="/opt/vault/tls/ca.crt"
 
 main() {
-  vault_cluster_state="$(fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}" 2>/dev/null)" || vault_cluster_state=""
-  vault_pki_state="$(fetch_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}" 2>/dev/null)" || vault_pki_state=""
+  vault_cluster_state="$(
+    fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}" 2>/dev/null
+  )" ||
+    vault_cluster_state=""
+
+  vault_pki_state="$(
+    fetch_parameter "${BOOTSTRAP_VAULT_PKI_STATE_SSM_PARAMETER_NAME}" 2>/dev/null
+  )" ||
+    vault_pki_state=""
 
   case "${vault_cluster_state}:${vault_pki_state}" in
     Ready:Ready)
