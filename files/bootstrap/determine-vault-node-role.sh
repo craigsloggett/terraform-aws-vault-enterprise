@@ -44,16 +44,11 @@ is_bootstrap_node() (
       tr '\t' '\n' | sort | head -1
   )"
 
-  [ "${INSTANCE_ID}" = "${lowest_instance_id}" ]
+  [ "${instance_id}" = "${lowest_instance_id}" ]
 )
 
 claim_bootstrap_role() (
-  log_info "================================================================"
-  log_info ""
-  log_info "             This Vault node won bootstrap election             "
-  log_info ""
-  log_info "================================================================"
-  log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
+  log_info "Attempting to claim the bootstrap role"
 
   put_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" "${INSTANCE_ID}"
 )
@@ -64,9 +59,17 @@ verify_bootstrap_claim() (
   )"
 
   if [ "${published_bootstrap_instance_id}" = "${INSTANCE_ID}" ]; then
+    log_info "================================================================"
+    log_info ""
+    log_info "             This Vault node won bootstrap election             "
+    log_info ""
+    log_info "================================================================"
+    log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
+
     return 0
   fi
 
+  log_warn "Lost bootstrap race, deferring to elected node"
   return 1
 )
 
@@ -98,10 +101,8 @@ main() {
   fi
 
   claim_bootstrap_role
-
-  if ! verify_bootstrap_claim; then
-    await_bootstrap_election
-  fi
+  verify_bootstrap_claim ||
+    log_warn "Lost bootstrap race, deferring to elected node"
 }
 
 main "$@"
