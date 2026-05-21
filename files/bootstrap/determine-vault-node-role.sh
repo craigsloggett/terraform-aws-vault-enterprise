@@ -19,17 +19,6 @@ bootstrap_cluster_ready() (
   [ "${bootstrap_cluster_state}" = "Ready" ]
 )
 
-is_bootstrap_node() (
-  cluster_instance_ids="$1"
-
-  lowest_instance_id="$(
-    printf '%s' "${cluster_instance_ids}" |
-      tr '\t' '\n' | sort | head -1
-  )"
-
-  [ "${INSTANCE_ID}" = "${lowest_instance_id}" ]
-)
-
 bootstrap_instance_id_published() (
   bootstrap_instance_id="$(
     fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" 2>/dev/null
@@ -45,6 +34,19 @@ bootstrap_instance_id_published() (
   return 0
 )
 
+is_bootstrap_node() (
+  instance_id="$1"
+
+  cluster_instance_ids="$(fetch_instance_ids_with_tag "${AUTO_JOIN_TAG_KEY}" "${AUTO_JOIN_TAG_VALUE}")"
+
+  lowest_instance_id="$(
+    printf '%s' "${cluster_instance_ids}" |
+      tr '\t' '\n' | sort | head -1
+  )"
+
+  [ "${INSTANCE_ID}" = "${lowest_instance_id}" ]
+)
+
 claim_bootstrap_role() (
   log_info "================================================================"
   log_info ""
@@ -54,6 +56,18 @@ claim_bootstrap_role() (
   log_info "Publishing EC2 instance ID (${INSTANCE_ID}) to SSM parameter: ${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
 
   put_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}" "${INSTANCE_ID}"
+)
+
+verify_bootstrap_claim() (
+  published_bootstrap_instance_id="$(
+    fetch_parameter "${BOOTSTRAP_INSTANCE_ID_SSM_PARAMETER_NAME}"
+  )"
+
+  if [ "${published_bootstrap_instance_id}" = "${INSTANCE_ID}" ]; then
+    return 0
+  fi
+
+  return 1
 )
 
 await_bootstrap_election() (
@@ -69,15 +83,23 @@ await_bootstrap_election() (
 
 main() {
   if bootstrap_cluster_ready; then
-    log_info "Cluster already initialized, skipping bootstrap election"
+    log_info "Vault cluster already initialized, skipping bootstrap election"
     return 0
   fi
 
-  cluster_instance_ids="$(fetch_instance_ids_with_tag "${AUTO_JOIN_TAG_KEY}" "${AUTO_JOIN_TAG_VALUE}")"
+  if bootstrap_instance_id_published; then
+    log_info "Bootstrap node already elected, skipping bootstrap election"
+    return 0
+  fi
 
-  if is_bootstrap_node "${cluster_instance_ids}"; then
-    claim_bootstrap_role
-  else
+  if ! is_bootstrap_node "${INSTANCE_ID}"; then
+    await_bootstrap_election
+    return 0
+  fi
+
+  claim_bootstrap_role
+
+  if ! verify_bootstrap_claim; then
     await_bootstrap_election
   fi
 }
