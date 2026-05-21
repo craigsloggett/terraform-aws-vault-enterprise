@@ -1,5 +1,5 @@
 #!/bin/sh
-# write-vault-license.sh
+# install-vault-enterprise-license.sh
 #
 # Fetches the Vault Enterprise license from Secrets Manager and writes it
 # to /opt/vault/vault.hclic. Runs on every node before vault.service starts.
