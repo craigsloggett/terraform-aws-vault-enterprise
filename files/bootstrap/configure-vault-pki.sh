@@ -49,7 +49,7 @@ EOF
 )
 
 generate_vault_pki_intermediate_ca() (
-  intermediate_ca_response_file="$1"
+  intermediate_generate_internal_response_file="$1"
 
   log_info "Generating the Vault PKI intermediate CA"
 
@@ -69,15 +69,16 @@ generate_vault_pki_intermediate_ca() (
       }'
   )"
 
-  vault write -format=json "${VAULT_PKI_MOUNT_PATH}/intermediate/generate/internal" - >"${intermediate_ca_response_file}" <<EOF
+  vault write -format=json "${VAULT_PKI_MOUNT_PATH}/intermediate/generate/internal" - \
+    >"${intermediate_generate_internal_response_file}" <<EOF
 ${intermediate_generate_internal_payload}
 EOF
 )
 
 extract_vault_pki_intermediate_ca_csr() (
-  intermediate_ca_response_file="$1"
+  intermediate_generate_internal_response_file="$1"
 
-  jq -r '.data.csr' <"${intermediate_ca_response_file}"
+  jq -r '.data.csr' <"${intermediate_generate_internal_response_file}"
 )
 
 publish_vault_pki_intermediate_ca_csr() (
@@ -89,7 +90,9 @@ publish_vault_pki_intermediate_ca_csr() (
 )
 
 signed_vault_pki_intermediate_ca_available() (
-  signed_vault_pki_intermediate_ca="$(fetch_secret_no_retry "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")" ||
+  signed_vault_pki_intermediate_ca="$(
+    fetch_secret_no_retry "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
+  )" ||
     return 1
 
   [ -n "${signed_vault_pki_intermediate_ca}" ] ||
@@ -109,18 +112,28 @@ await_signed_vault_pki_intermediate_ca() (
     }
 )
 
+write_signed_vault_pki_intermediate_ca_file() (
+  signed_vault_pki_intermediate_ca_file="$1"
+
+  fetch_secret "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}" \
+    >"${signed_vault_pki_intermediate_ca_file}"
+)
+
 validate_signed_vault_pki_intermediate_ca() (
-  signed_vault_pki_intermediate_ca="$1"
+  signed_vault_pki_intermediate_ca_file="$1"
 
   log_info "Validating the signed Vault PKI intermediate CA"
 
-  if printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -e 'has("private_key")' >/dev/null 2>&1; then
+  if jq -e 'has("private_key")' <"${signed_vault_pki_intermediate_ca_file}" >/dev/null 2>&1; then
     log_error "Signed Vault PKI intermediate CA contains a private_key field, aborting"
     return 1
   fi
 
   for field in signed_intermediate_ca_pem ca_chain_pem; do
-    value="$(printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -r --arg field "${field}" '.[$field] // empty')"
+    value="$(
+      jq -r --arg field "${field}" '.[$field] // empty' \
+        <"${signed_vault_pki_intermediate_ca_file}"
+    )"
     if [ -z "${value}" ]; then
       log_error "${field} field is missing or empty in: ${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
       return 1
@@ -129,26 +142,29 @@ validate_signed_vault_pki_intermediate_ca() (
 )
 
 import_signed_vault_pki_intermediate_ca() (
-  signed_vault_pki_intermediate_ca="$1"
+  signed_vault_pki_intermediate_ca_file="$1"
 
   log_info "Importing the signed Vault PKI intermediate CA"
 
   intermediate_ca_set_signed_payload="$(
-    printf '%s' "${signed_vault_pki_intermediate_ca}" |
-      jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}'
+    jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}' \
+      <"${signed_vault_pki_intermediate_ca_file}"
   )"
 
-  intermediate_ca_set_signed_response_file="${TMPDIR_SESSION}/intermediate_ca_set_signed_response.json"
+  intermediate_set_signed_response_file="${TMPDIR_SESSION}/intermediate_set_signed_response.json"
 
-  vault write -format=json "${VAULT_PKI_MOUNT_PATH}/intermediate/set-signed" - >"${intermediate_ca_set_signed_response_file}" <<EOF
+  vault write -format=json "${VAULT_PKI_MOUNT_PATH}/intermediate/set-signed" - \
+    >"${intermediate_set_signed_response_file}" <<EOF
 ${intermediate_ca_set_signed_payload}
 EOF
 
-  imported_intermediate_ca_issuer_id="$(
-    jq -r '.data.mapping | to_entries[] | select(.value != "") | .key' <"${intermediate_ca_set_signed_response_file}"
+  signed_vault_pki_intermediate_ca_issuer="$(
+    jq -r '.data.mapping | to_entries[] | select(.value != "") | .key' \
+      <"${intermediate_set_signed_response_file}"
   )"
 
-  vault write "${VAULT_PKI_MOUNT_PATH}/config/issuers" default="${imported_intermediate_ca_issuer_id}" >/dev/null
+  vault write "${VAULT_PKI_MOUNT_PATH}/config/issuers" \
+    default="${signed_vault_pki_intermediate_ca_issuer}" >/dev/null
 )
 
 configure_vault_pki_role() (
@@ -239,16 +255,18 @@ main() {
   enable_vault_pki_secrets_engine
   configure_vault_pki_urls
 
-  intermediate_ca_response_file="${TMPDIR_SESSION}/intermediate_ca_response.json"
-  generate_vault_pki_intermediate_ca "${intermediate_ca_response_file}"
+  intermediate_generate_internal_response_file="${TMPDIR_SESSION}/intermediate_generate_internal_response.json"
+  generate_vault_pki_intermediate_ca "${intermediate_generate_internal_response_file}"
   publish_vault_pki_intermediate_ca_csr "$(
-    extract_vault_pki_intermediate_ca_csr "${intermediate_ca_response_file}"
+    extract_vault_pki_intermediate_ca_csr "${intermediate_generate_internal_response_file}"
   )"
 
   await_signed_vault_pki_intermediate_ca
-  signed_vault_pki_intermediate_ca="$(fetch_secret "${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}")"
-  validate_signed_vault_pki_intermediate_ca "${signed_vault_pki_intermediate_ca}"
-  import_signed_vault_pki_intermediate_ca "${signed_vault_pki_intermediate_ca}"
+
+  signed_vault_pki_intermediate_ca_file="${TMPDIR_SESSION}/signed_vault_pki_intermediate_ca.json"
+  write_signed_vault_pki_intermediate_ca_file "${signed_vault_pki_intermediate_ca_file}"
+  validate_signed_vault_pki_intermediate_ca "${signed_vault_pki_intermediate_ca_file}"
+  import_signed_vault_pki_intermediate_ca "${signed_vault_pki_intermediate_ca_file}"
 
   configure_vault_pki_role
   publish_vault_pki_ca_chain
