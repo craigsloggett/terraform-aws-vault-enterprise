@@ -32,12 +32,19 @@ enable_vault_pki_secrets_engine() (
 configure_vault_pki_urls() (
   log_info "Configuring Vault PKI URLs"
 
+  config_urls_payload="$(
+    jq -nc \
+      --arg vault_fqdn "${VAULT_FQDN}" \
+      --arg vault_pki_mount_path "${VAULT_PKI_MOUNT_PATH}" \
+      '{
+        issuing_certificates: "https://\($vault_fqdn):8200/v1/\($vault_pki_mount_path)/ca",
+        crl_distribution_points: "https://\($vault_fqdn):8200/v1/\($vault_pki_mount_path)/crl",
+        ocsp_servers: "https://\($vault_fqdn):8200/v1/\($vault_pki_mount_path)/ocsp"
+      }'
+  )"
+
   vault write "${VAULT_PKI_MOUNT_PATH}/config/urls" - >/dev/null <<EOF
-{
-  "issuing_certificates": "https://${VAULT_FQDN}:8200/v1/${VAULT_PKI_MOUNT_PATH}/ca",
-  "crl_distribution_points": "https://${VAULT_FQDN}:8200/v1/${VAULT_PKI_MOUNT_PATH}/crl",
-  "ocsp_servers": "https://${VAULT_FQDN}:8200/v1/${VAULT_PKI_MOUNT_PATH}/ocsp"
-}
+"${config_urls_payload}"
 EOF
 )
 
@@ -46,18 +53,24 @@ generate_vault_pki_intermediate_ca() (
 
   log_info "Generating the Vault PKI intermediate CA"
 
-  intermediate_ca_payload="$(
+  intermediate_generate_internal_payload="$(
     jq -nc \
       --arg common_name "${VAULT_PKI_INTERMEDIATE_CA_COMMON_NAME}" \
       --arg country "${VAULT_PKI_INTERMEDIATE_CA_COUNTRY}" \
       --arg organization "${VAULT_PKI_INTERMEDIATE_CA_ORGANIZATION}" \
       --arg key_type "${VAULT_PKI_INTERMEDIATE_CA_KEY_TYPE}" \
       --argjson key_bits "${VAULT_PKI_INTERMEDIATE_CA_KEY_BITS}" \
-      '{common_name: $common_name, country: $country, organization: $organization, key_type: $key_type, key_bits: $key_bits}'
+      '{
+        common_name: $common_name,
+        country: $country,
+        organization: $organization,
+        key_type: $key_type,
+        key_bits: $key_bits
+      }'
   )"
 
   vault write -format=json "${VAULT_PKI_MOUNT_PATH}/intermediate/generate/internal" - >"${intermediate_ca_response_file}" <<EOF
-${intermediate_ca_payload}
+${intermediate_generate_internal_payload}
 EOF
 )
 
@@ -121,7 +134,8 @@ import_signed_vault_pki_intermediate_ca() (
   log_info "Importing the signed Vault PKI intermediate CA"
 
   intermediate_ca_set_signed_payload="$(
-    printf '%s' "${signed_vault_pki_intermediate_ca}" | jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}'
+    printf '%s' "${signed_vault_pki_intermediate_ca}" |
+      jq -c '{certificate: (.signed_intermediate_ca_pem + "\n" + .ca_chain_pem)}'
   )"
 
   intermediate_ca_set_signed_response_file="${TMPDIR_SESSION}/intermediate_ca_set_signed_response.json"
@@ -140,21 +154,30 @@ EOF
 configure_vault_pki_role() (
   log_info "Configuring the Vault PKI role: vault-server"
 
+  roles_vault_server_payload="$(
+    jq -nc \
+      --arg allowed_domains "${VAULT_FQDN}" \
+      --arg country "${VAULT_PKI_INTERMEDIATE_CA_COUNTRY}" \
+      --arg organization "${VAULT_PKI_INTERMEDIATE_CA_ORGANIZATION}" \
+      --arg max_ttl "${VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL}" \
+      '{
+        allowed_domains: $allowed_domains,
+        allow_bare_domains: true,
+        allow_subdomains: false,
+        allow_localhost: false,
+        allow_ip_sans: false,
+        country: [$country],
+        organization: [$organization],
+        ext_key_usage: ["serverAuth"],
+        key_type: "ec",
+        key_bits: 384,
+        max_ttl: $max_ttl,
+        not_before_duration: "0s"
+      }'
+  )"
+
   vault write "${VAULT_PKI_MOUNT_PATH}/roles/vault-server" - >/dev/null <<EOF
-{
-  "allowed_domains": "${VAULT_FQDN}",
-  "allow_bare_domains": true,
-  "allow_subdomains": false,
-  "allow_localhost": false,
-  "allow_ip_sans": false,
-  "country": ["${VAULT_PKI_INTERMEDIATE_CA_COUNTRY}"],
-  "organization": ["${VAULT_PKI_INTERMEDIATE_CA_ORGANIZATION}"],
-  "ext_key_usage": ["serverAuth"],
-  "key_type": "ec",
-  "key_bits": 384,
-  "max_ttl": "${VAULT_PKI_VAULT_SERVER_ROLE_MAX_TTL}",
-  "not_before_duration": "0s"
-}
+"${roles_vault_server_payload}"
 EOF
 
   vault policy write vault-server "${VAULT_POLICY_DIR}/vault-server.hcl"
