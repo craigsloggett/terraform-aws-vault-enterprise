@@ -144,14 +144,14 @@ resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" 
 | Name | Version |
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.0 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | 6.44.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | 6.46.0 |
 | <a name="requirement_tls"></a> [tls](#requirement\_tls) | 4.3.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.44.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.46.0 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 | <a name="provider_tls"></a> [tls](#provider\_tls) | 4.3.0 |
 
@@ -166,13 +166,13 @@ resource "aws_secretsmanager_secret_version" "vault_pki_signed_intermediate_ca" 
 
 | Name | Type |
 | ---- | ---- |
-| [aws_secretsmanager_secret_version.vault_pki_signed_intermediate_ca](https://registry.terraform.io/providers/hashicorp/aws/6.44.0/docs/resources/secretsmanager_secret_version) | resource |
+| [aws_secretsmanager_secret_version.vault_pki_signed_intermediate_ca](https://registry.terraform.io/providers/hashicorp/aws/6.46.0/docs/resources/secretsmanager_secret_version) | resource |
 | [terraform_data.await_csr](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [tls_locally_signed_cert.vault_pki_signed_intermediate_ca](https://registry.terraform.io/providers/hashicorp/tls/4.3.0/docs/resources/locally_signed_cert) | resource |
 | [tls_private_key.root_ca](https://registry.terraform.io/providers/hashicorp/tls/4.3.0/docs/resources/private_key) | resource |
 | [tls_self_signed_cert.root_ca](https://registry.terraform.io/providers/hashicorp/tls/4.3.0/docs/resources/self_signed_cert) | resource |
-| [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/6.44.0/docs/data-sources/region) | data source |
-| [aws_ssm_parameter.vault_pki_intermediate_ca_csr](https://registry.terraform.io/providers/hashicorp/aws/6.44.0/docs/data-sources/ssm_parameter) | data source |
+| [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/6.46.0/docs/data-sources/region) | data source |
+| [aws_ssm_parameter.vault_pki_intermediate_ca_csr](https://registry.terraform.io/providers/hashicorp/aws/6.46.0/docs/data-sources/ssm_parameter) | data source |
 
 ## Outputs
 
