@@ -25,6 +25,6 @@ jobs:
 
       - name: Create a GitHub Release
         id: release
-        uses: craigsloggett/create-github-release@7360c4962908b029931bcd382a7239014745e700 # v1.0.20
+        uses: craigsloggett/create-github-release@afe4170133e10ece0944212d5f105035758ce840 # v1.0.24
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
