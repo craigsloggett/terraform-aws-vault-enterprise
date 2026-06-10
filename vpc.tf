@@ -16,6 +16,14 @@ module "vpc" {
 
   enable_dns_hostnames = true
   enable_dns_support   = true
+
+  enable_flow_log                                 = true
+  create_flow_log_cloudwatch_log_group            = true
+  create_flow_log_cloudwatch_iam_role             = true
+  flow_log_cloudwatch_log_group_retention_in_days = 90
+
+  vpc_flow_log_iam_role_name            = "VaultEnterpriseVPCFlowLogsRole"
+  vpc_flow_log_iam_role_use_name_prefix = false
 }
 
 # VPC Endpoints
@@ -105,11 +113,58 @@ resource "aws_vpc_security_group_ingress_rule" "bastion_ssh" {
   cidr_ipv4         = each.value
 }
 
-resource "aws_vpc_security_group_egress_rule" "bastion_all" {
+resource "aws_vpc_security_group_egress_rule" "bastion_ssh" {
+  security_group_id            = aws_security_group.bastion.id
+  description                  = "SSH traffic to the Vault servers"
+  from_port                    = 22
+  to_port                      = 22
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = aws_security_group.vault_enterprise_servers.id
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_https" {
   security_group_id = aws_security_group.bastion.id
-  description       = "All outbound traffic"
-  ip_protocol       = "-1"
+  description       = "HTTPS traffic for OS packages"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
   cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_http" {
+  security_group_id = aws_security_group.bastion.id
+  description       = "HTTP traffic for OS package mirrors"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_ntp" {
+  security_group_id = aws_security_group.bastion.id
+  description       = "NTP traffic to distribution pool servers"
+  from_port         = 123
+  to_port           = 123
+  ip_protocol       = "udp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_dns_tcp" {
+  security_group_id = aws_security_group.bastion.id
+  description       = "DNS traffic to VPC resolvers"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "tcp"
+  cidr_ipv4         = local.vpc.cidr
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_dns_udp" {
+  security_group_id = aws_security_group.bastion.id
+  description       = "DNS traffic to VPC resolvers"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "udp"
+  cidr_ipv4         = local.vpc.cidr
 }
 
 resource "aws_security_group" "vault_enterprise_servers" {
@@ -164,11 +219,67 @@ resource "aws_vpc_security_group_ingress_rule" "vault_ssh" {
   referenced_security_group_id = aws_security_group.bastion.id
 }
 
-resource "aws_vpc_security_group_egress_rule" "vault_all" {
+resource "aws_vpc_security_group_egress_rule" "vault_https" {
   security_group_id = aws_security_group.vault_enterprise_servers.id
-  description       = "All outbound traffic"
-  ip_protocol       = "-1"
+  description       = "HTTPS traffic for AWS APIs and HashiCorp releases"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
   cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "vault_http" {
+  security_group_id = aws_security_group.vault_enterprise_servers.id
+  description       = "HTTP traffic for OS package mirrors"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "vault_api" {
+  security_group_id = aws_security_group.vault_enterprise_servers.id
+  description       = "Vault Enterprise API traffic to raft peers"
+  from_port         = 8200
+  to_port           = 8200
+  ip_protocol       = "tcp"
+  cidr_ipv4         = local.vpc.cidr
+}
+
+resource "aws_vpc_security_group_egress_rule" "vault_cluster" {
+  security_group_id            = aws_security_group.vault_enterprise_servers.id
+  description                  = "Vault Enterprise inter-cluster traffic"
+  from_port                    = 8201
+  to_port                      = 8201
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = aws_security_group.vault_enterprise_servers.id
+}
+
+resource "aws_vpc_security_group_egress_rule" "vault_ntp" {
+  security_group_id = aws_security_group.vault_enterprise_servers.id
+  description       = "NTP traffic to distribution pool servers"
+  from_port         = 123
+  to_port           = 123
+  ip_protocol       = "udp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "vault_dns_tcp" {
+  security_group_id = aws_security_group.vault_enterprise_servers.id
+  description       = "DNS traffic to VPC resolvers"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "tcp"
+  cidr_ipv4         = local.vpc.cidr
+}
+
+resource "aws_vpc_security_group_egress_rule" "vault_dns_udp" {
+  security_group_id = aws_security_group.vault_enterprise_servers.id
+  description       = "DNS traffic to VPC resolvers"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "udp"
+  cidr_ipv4         = local.vpc.cidr
 }
 
 resource "aws_security_group" "vpc_endpoints" {

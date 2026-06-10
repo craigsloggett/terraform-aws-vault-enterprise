@@ -10,6 +10,8 @@ set -euf
 # shellcheck source=SCRIPTDIR/common-functions.sh
 . /var/lib/cloud/scripts/common-functions.sh
 
+readonly VAULT_TLS_CA_FILE="/opt/vault/tls/ca.crt"
+
 start_vault() (
   log_info "Starting vault.service"
 
@@ -18,11 +20,20 @@ start_vault() (
 )
 
 vault_api_ready() (
+  curl_exit=0
   status="$(
-    curl --silent --insecure --output /dev/null --write-out '%{http_code}' \
+    curl --silent --cacert "${VAULT_TLS_CA_FILE}" \
+      --output /dev/null --write-out '%{http_code}' \
       "https://127.0.0.1:8200/v1/sys/health" 2>/dev/null
-  )" ||
-    return 1
+  )" || curl_exit="$?"
+
+  if [ "${curl_exit}" -ne 0 ]; then
+    # A replacement node serves the expired bootstrap certificate until the
+    # PKI-issued certificate replaces it, so a verification failure (curl
+    # exit 60) still proves the API is responding.
+    [ "${curl_exit}" -eq 60 ]
+    return
+  fi
 
   [ "${status}" != "000" ]
 )

@@ -31,7 +31,7 @@ users:
 write_files:
   - path: /var/lib/cloud/scripts/bootstrap.env
     owner: root:root
-    permissions: '0644'
+    permissions: '0600'
     content: |
       ${indent(6, bootstrap_env_file)}
 

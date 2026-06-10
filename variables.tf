@@ -480,9 +480,10 @@ variable "compute" {
 
 variable "nlb" {
   type = object({
-    name_prefix       = optional(string, "vault-")
-    internal          = optional(bool, true)
-    api_allowed_cidrs = optional(list(string), [])
+    name_prefix         = optional(string, "vault-")
+    internal            = optional(bool, true)
+    api_allowed_cidrs   = optional(list(string), [])
+    deletion_protection = optional(bool, true)
 
     lb_target_group = optional(object({
       name_prefix = optional(string, "vault-")
@@ -513,14 +514,19 @@ variable "nlb" {
 
 variable "kms_key" {
   type = object({
-    name                    = optional(string, "vault-enterprise-auto-unseal-key")
-    alias                   = optional(string, "vault-enterprise-auto-unseal-key")
-    deletion_window_in_days = optional(number, 7)
-    enable_key_rotation     = optional(bool, true)
+    name                       = optional(string, "vault-enterprise-auto-unseal-key")
+    alias                      = optional(string, "vault-enterprise-auto-unseal-key")
+    deletion_window_in_days    = optional(number, 7)
+    additional_usage_role_name = optional(string)
   })
 
   default     = {}
-  description = "Configuration for the KMS key used for Vault auto-unseal."
+  description = <<-EOT
+    Configuration for the KMS key used for Vault auto-unseal. The key policy
+    pins cryptographic operations to the Vault server role;
+    `additional_usage_role_name` names an existing IAM role to also grant
+    usage of the key.
+  EOT
 
   validation {
     condition     = var.kms_key.deletion_window_in_days >= 7 && var.kms_key.deletion_window_in_days <= 30
