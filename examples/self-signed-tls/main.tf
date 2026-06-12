@@ -4,9 +4,4 @@ module "vault" {
 
   vault_enterprise_license = var.vault_enterprise_license
   vault_fqdn               = var.vault_fqdn
-
-  nlb = {
-    # Deletion protection blocks `terraform destroy` of this example.
-    deletion_protection = false
-  }
 }
