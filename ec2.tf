@@ -62,6 +62,7 @@ resource "aws_launch_template" "vault_enterprise" {
       bootstrap_vault_cluster_state_ssm_parameter_name = aws_ssm_parameter.bootstrap_vault_cluster_state.name
       bootstrap_vault_pki_state_ssm_parameter_name     = aws_ssm_parameter.bootstrap_vault_pki_state.name
       bootstrap_instance_id_ssm_parameter_name         = aws_ssm_parameter.bootstrap_instance_id.name
+      bootstrap_tls_ca_certificate_ssm_parameter_name  = aws_ssm_parameter.bootstrap_tls_ca_certificate.name
 
       # Bootstrap Secrets
       license_secret_arn       = aws_secretsmanager_secret.license.arn
@@ -125,11 +126,6 @@ resource "aws_launch_template" "vault_enterprise" {
     script_configure_vault_jwt_auth            = file("${path.module}/files/bootstrap/configure-vault-jwt-auth.sh")
     script_configure_vault_pki                 = file("${path.module}/files/bootstrap/configure-vault-pki.sh")
     script_issue_vault_tls_cert                = file("${path.module}/files/bootstrap/issue-vault-tls-cert.sh")
-
-    # Bootstrap TLS Materials
-    bootstrap_tls_ca_pem          = tls_self_signed_cert.bootstrap_tls_ca.cert_pem
-    bootstrap_tls_cert_pem        = tls_locally_signed_cert.bootstrap_tls_cert.cert_pem
-    bootstrap_tls_private_key_pem = tls_private_key.bootstrap_tls_private_key.private_key_pem
 
     # Vault Server Configuration
     config_vault_cli = templatefile("${path.module}/templates/vault/cli-config.sh.tftpl", {

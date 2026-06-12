@@ -28,9 +28,9 @@ vault_api_ready() (
   )" || curl_exit="$?"
 
   if [ "${curl_exit}" -ne 0 ]; then
-    # A replacement node serves the expired bootstrap certificate until the
-    # PKI-issued certificate replaces it, so a verification failure (curl
-    # exit 60) still proves the API is responding.
+    # The node's own bootstrap CA in ca.crt should validate the local
+    # listener, but a verification failure (curl exit 60) still proves the
+    # API is responding, so tolerate it rather than stall the boot.
     [ "${curl_exit}" -eq 60 ]
     return
   fi
