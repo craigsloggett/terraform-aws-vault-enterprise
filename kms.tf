@@ -11,26 +11,34 @@ data "aws_iam_policy_document" "auto_unseal_key_policy" {
 
     # Administrative actions only, no cryptographic operations. Keeping
     # kms:Put* delegated to IAM lets the deployer correct this policy,
-    # preventing lockout, while usage stays pinned to the principals below.
+    # preventing lockout, while usage stays pinned to the principals
+    # listed in the AutoUnsealUsage statement below.
     actions = [
       "kms:CancelKeyDeletion",
-      "kms:Create*",
-      "kms:Delete*",
-      "kms:Describe*",
-      "kms:Disable*",
-      "kms:Enable*",
-      "kms:Get*",
-      "kms:List*",
-      "kms:Put*",
-      "kms:Revoke*",
+      "kms:CreateAlias",
+      "kms:DeleteAlias",
+      "kms:DescribeKey",
+      "kms:DisableKey",
+      "kms:DisableKeyRotation",
+      "kms:EnableKey",
+      "kms:EnableKeyRotation",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListResourceTags",
+      "kms:PutKeyPolicy",
       "kms:ScheduleKeyDeletion",
       "kms:TagResource",
       "kms:UntagResource",
-      "kms:Update*",
+      "kms:UpdateAlias",
+      "kms:UpdateKeyDescription",
     ]
 
-    resources = ["*"]
+    resources = ["*"] # The key this policy is attached to, not all keys.
 
+    # https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-overview.html
+    # A principal in arn:aws:iam::111122223333:root" format does not represent
+    # the AWS account root user, despite the use of "root" in the account
+    # identifier.
     principals {
       type        = "AWS"
       identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
