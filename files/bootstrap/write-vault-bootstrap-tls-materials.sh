@@ -31,7 +31,7 @@ generate_bootstrap_ca() (
     -keyout "${TMPDIR_SESSION}/ca.key" \
     -out "${TMPDIR_SESSION}/ca.crt" \
     -days "${VAULT_BOOTSTRAP_TLS_VALIDITY_DAYS}" -sha384 \
-    -subj "/CN=Vault Bootstrap CA/O=HashiCorp Vault" \
+    -subj "/CN=Vault Bootstrap CA ${INSTANCE_ID}/O=HashiCorp Vault" \
     -addext "basicConstraints=critical,CA:true" \
     -addext "keyUsage=critical,keyCertSign,cRLSign"
 )
@@ -81,6 +81,12 @@ destroy_bootstrap_ca_key() (
 
 install_bootstrap_tls_materials() (
   log_info "Installing TLS materials to: ${VAULT_TLS_DIR}"
+
+  # Each stage lives in VAULT_TLS_DIR so the final mv is an atomic
+  # same-filesystem rename, which puts it outside the session tempdir the
+  # top-level trap clears; this subshell's own trap removes a leaked stage.
+  staged_file=""
+  trap 'rm -f "${staged_file}"' EXIT INT TERM HUP
 
   staged_file="$(mktemp "${VAULT_TLS_DIR}/.XXXXXXXX")"
   install -o vault -g vault -m 0644 -T "${TMPDIR_SESSION}/ca.crt" "${staged_file}"
@@ -141,6 +147,14 @@ append_vault_pki_ca_chain() (
 )
 
 main() {
+  # A node with TLS materials already in place has been provisioned; do not
+  # regenerate. A forced cloud-init re-run after Vault PKI issued the
+  # long-term certificate would otherwise clobber it with an ephemeral one.
+  if [ -e "${VAULT_TLS_CERT_FILE}" ]; then
+    log_info "TLS materials already present in ${VAULT_TLS_DIR}, skipping bootstrap generation"
+    return 0
+  fi
+
   command -v openssl >/dev/null 2>&1 ||
     {
       log_error "openssl is required but not installed"
