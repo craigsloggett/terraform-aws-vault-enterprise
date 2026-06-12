@@ -637,6 +637,7 @@ variable "bootstrap" {
       vault_cluster_state_name = optional(string, "/vault-enterprise/bootstrap/cluster/state")
       vault_pki_state_name     = optional(string, "/vault-enterprise/bootstrap/pki/state")
       instance_id_name         = optional(string, "/vault-enterprise/bootstrap/instance/id")
+      tls_ca_certificate_name  = optional(string, "/vault-enterprise/bootstrap/tls/ca-certificate")
     }), {})
   })
 

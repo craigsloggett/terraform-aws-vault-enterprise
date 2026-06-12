@@ -53,6 +53,11 @@ output "bootstrap_instance_id_ssm_parameter_name" {
   value       = aws_ssm_parameter.bootstrap_instance_id.name
 }
 
+output "bootstrap_tls_ca_certificate_ssm_parameter_name" {
+  description = "SSM Parameter for the bootstrap node ephemeral TLS CA certificate PEM."
+  value       = aws_ssm_parameter.bootstrap_tls_ca_certificate.name
+}
+
 output "vault_pki_ca_chain_ssm_parameter_name" {
   description = "SSM Parameter for the Vault PKI CA chain PEM."
   value       = aws_ssm_parameter.vault_pki_ca_chain.name
