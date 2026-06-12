@@ -72,11 +72,7 @@ generate_bootstrap_server_certificate() (
 destroy_bootstrap_ca_key() (
   log_info "Destroying the ephemeral bootstrap CA private key"
 
-  if command -v shred >/dev/null 2>&1; then
-    shred -u "${TMPDIR_SESSION}/ca.key"
-  else
-    rm -f "${TMPDIR_SESSION}/ca.key"
-  fi
+  rm -f "${TMPDIR_SESSION}/ca.key"
 )
 
 install_bootstrap_tls_materials() (
