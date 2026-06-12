@@ -21,32 +21,32 @@ readonly VAULT_TLS_DIR="/opt/vault/tls"
 readonly VAULT_TLS_CA_FILE="${VAULT_TLS_DIR}/ca.crt"
 readonly VAULT_TLS_CERT_FILE="${VAULT_TLS_DIR}/server.crt"
 readonly VAULT_TLS_KEY_FILE="${VAULT_TLS_DIR}/server.key"
-readonly TLS_VALIDITY_DAYS=2
+readonly VAULT_BOOTSTRAP_TLS_VALIDITY_DAYS=2
 
 generate_bootstrap_ca() (
   log_info "Generating an ephemeral bootstrap CA"
 
   openssl req -x509 \
     -newkey ec -pkeyopt ec_paramgen_curve:P-384 -nodes \
-    -keyout "${TLS_WORKSPACE}/ca.key" \
-    -out "${TLS_WORKSPACE}/ca.crt" \
-    -days "${TLS_VALIDITY_DAYS}" -sha384 \
+    -keyout "${TMPDIR_SESSION}/ca.key" \
+    -out "${TMPDIR_SESSION}/ca.crt" \
+    -days "${VAULT_BOOTSTRAP_TLS_VALIDITY_DAYS}" -sha384 \
     -subj "/CN=Vault Bootstrap CA/O=HashiCorp Vault" \
     -addext "basicConstraints=critical,CA:true" \
     -addext "keyUsage=critical,keyCertSign,cRLSign"
 )
 
-generate_server_certificate() (
+generate_bootstrap_server_certificate() (
   log_info "Generating the bootstrap server certificate"
 
   openssl genpkey -algorithm EC \
     -pkeyopt ec_paramgen_curve:P-384 \
-    -out "${TLS_WORKSPACE}/server.key"
+    -out "${TMPDIR_SESSION}/server.key"
 
   openssl req -new \
-    -key "${TLS_WORKSPACE}/server.key" \
+    -key "${TMPDIR_SESSION}/server.key" \
     -subj "/CN=${VAULT_FQDN}/O=HashiCorp Vault" \
-    -out "${TLS_WORKSPACE}/server.csr"
+    -out "${TMPDIR_SESSION}/server.csr"
 
   # The FQDN SAN lets local clients keep validating 127.0.0.1 with
   # tls_server_name set to the FQDN, exactly as they do against the
@@ -57,51 +57,49 @@ generate_server_certificate() (
     printf '%s\n' 'extendedKeyUsage = serverAuth'
     printf 'subjectAltName = DNS:%s, DNS:localhost, IP:127.0.0.1, IP:%s\n' \
       "${VAULT_FQDN}" "${LOCAL_IPV4}"
-  } >"${TLS_WORKSPACE}/server.ext"
+  } >"${TMPDIR_SESSION}/server.ext"
 
   openssl x509 -req \
-    -in "${TLS_WORKSPACE}/server.csr" \
-    -CA "${TLS_WORKSPACE}/ca.crt" \
-    -CAkey "${TLS_WORKSPACE}/ca.key" \
+    -in "${TMPDIR_SESSION}/server.csr" \
+    -CA "${TMPDIR_SESSION}/ca.crt" \
+    -CAkey "${TMPDIR_SESSION}/ca.key" \
     -CAcreateserial \
-    -days "${TLS_VALIDITY_DAYS}" -sha384 \
-    -extfile "${TLS_WORKSPACE}/server.ext" \
-    -out "${TLS_WORKSPACE}/server.crt"
+    -days "${VAULT_BOOTSTRAP_TLS_VALIDITY_DAYS}" -sha384 \
+    -extfile "${TMPDIR_SESSION}/server.ext" \
+    -out "${TMPDIR_SESSION}/server.crt"
 )
 
 destroy_bootstrap_ca_key() (
   log_info "Destroying the ephemeral bootstrap CA private key"
 
   if command -v shred >/dev/null 2>&1; then
-    shred -u "${TLS_WORKSPACE}/ca.key"
+    shred -u "${TMPDIR_SESSION}/ca.key"
   else
-    rm -f "${TLS_WORKSPACE}/ca.key"
+    rm -f "${TMPDIR_SESSION}/ca.key"
   fi
 )
 
-install_tls_material() (
-  source_file="${1:?source file is required}"
-  target_file="${2:?target file is required}"
-  mode="${3:?mode is required}"
-
-  staged_file="$(mktemp "${VAULT_TLS_DIR}/.XXXXXXXX")"
-  install -o vault -g vault -m "${mode}" -T "${source_file}" "${staged_file}"
-  mv "${staged_file}" "${target_file}"
-)
-
-install_tls_materials() (
+install_bootstrap_tls_materials() (
   log_info "Installing TLS materials to: ${VAULT_TLS_DIR}"
 
-  install_tls_material "${TLS_WORKSPACE}/ca.crt" "${VAULT_TLS_CA_FILE}" 0644
-  install_tls_material "${TLS_WORKSPACE}/server.crt" "${VAULT_TLS_CERT_FILE}" 0640
-  install_tls_material "${TLS_WORKSPACE}/server.key" "${VAULT_TLS_KEY_FILE}" 0640
+  staged_file="$(mktemp "${VAULT_TLS_DIR}/.XXXXXXXX")"
+  install -o vault -g vault -m 0644 -T "${TMPDIR_SESSION}/ca.crt" "${staged_file}"
+  mv "${staged_file}" "${VAULT_TLS_CA_FILE}"
+
+  staged_file="$(mktemp "${VAULT_TLS_DIR}/.XXXXXXXX")"
+  install -o vault -g vault -m 0640 -T "${TMPDIR_SESSION}/server.crt" "${staged_file}"
+  mv "${staged_file}" "${VAULT_TLS_CERT_FILE}"
+
+  staged_file="$(mktemp "${VAULT_TLS_DIR}/.XXXXXXXX")"
+  install -o vault -g vault -m 0640 -T "${TMPDIR_SESSION}/server.key" "${staged_file}"
+  mv "${staged_file}" "${VAULT_TLS_KEY_FILE}"
 )
 
 publish_bootstrap_ca_certificate() (
   log_info "Publishing the bootstrap CA certificate to SSM parameter: ${BOOTSTRAP_TLS_CA_CERTIFICATE_SSM_PARAMETER_NAME}"
 
   put_parameter "${BOOTSTRAP_TLS_CA_CERTIFICATE_SSM_PARAMETER_NAME}" \
-    "$(cat "${TLS_WORKSPACE}/ca.crt")"
+    "$(cat "${TMPDIR_SESSION}/ca.crt")"
 )
 
 bootstrap_ca_certificate_published() (
@@ -149,14 +147,14 @@ main() {
       return 1
     }
 
-  TLS_WORKSPACE="$(mktemp -d)"
-  readonly TLS_WORKSPACE
-  trap 'rm -rf "${TLS_WORKSPACE}"' EXIT INT TERM HUP
+  TMPDIR_SESSION="$(mktemp -d)"
+  readonly TMPDIR_SESSION
+  trap 'rm -rf "${TMPDIR_SESSION}"' EXIT INT TERM HUP
 
   generate_bootstrap_ca
-  generate_server_certificate
+  generate_bootstrap_server_certificate
   destroy_bootstrap_ca_key
-  install_tls_materials
+  install_bootstrap_tls_materials
 
   vault_cluster_state="$(
     fetch_parameter "${BOOTSTRAP_VAULT_CLUSTER_STATE_SSM_PARAMETER_NAME}" 2>/dev/null
