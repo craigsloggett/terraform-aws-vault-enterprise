@@ -125,7 +125,7 @@ validate_signed_vault_pki_intermediate_ca() (
   log_info "Validating the signed Vault PKI intermediate CA"
 
   if ! jq empty <"${signed_vault_pki_intermediate_ca_file}" 2>/dev/null; then
-    log_error "Signed Vault PKI intermediate CA is not valid JSON: ${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
+    log_error "Signed Vault PKI intermediate CA secret value is not valid JSON"
     return 1
   fi
 
@@ -140,7 +140,7 @@ validate_signed_vault_pki_intermediate_ca() (
         <"${signed_vault_pki_intermediate_ca_file}"
     )"
     if [ -z "${value}" ]; then
-      log_error "${field} field is missing or empty in: ${VAULT_PKI_SIGNED_INTERMEDIATE_CA_SECRET_ARN}"
+      log_error "${field} field is missing or empty in the signed intermediate CA secret"
       return 1
     fi
   done

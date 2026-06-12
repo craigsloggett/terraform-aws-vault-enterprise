@@ -5,6 +5,7 @@ resource "aws_lb" "vault_enterprise" {
   subnets            = var.nlb.internal ? local.vpc.private_subnet_ids : local.vpc.public_subnet_ids
 
   enable_cross_zone_load_balancing = true
+  enable_deletion_protection       = var.nlb.deletion_protection
 
   lifecycle {
     create_before_destroy = true
